@@ -7,6 +7,7 @@ Prototype for **SIH26032** — Ministry of Consumer Affairs, Food & Public Distr
 ![React Native](https://img.shields.io/badge/React%20Native-0.86-61DAFB?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
 ![Firebase](https://img.shields.io/badge/Firebase-Firestore%20%2B%20Auth-FFCA28?logo=firebase&logoColor=black)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ---
 
@@ -197,3 +198,7 @@ for anyone (human or AI) contributing code are in [`CLAUDE.md`](CLAUDE.md).
 | [`KisanQ_CrossQuestions_Reference.md`](docs/KisanQ_CrossQuestions_Reference.md) | Edge cases and ground-reality constraints the design accounts for |
 | [`KisanQ_Winning_Strategy.md`](docs/KisanQ_Winning_Strategy.md) | The core differentiator and how it maps to judging criteria |
 | [`KisanQ_PPT_Script.md`](docs/KisanQ_PPT_Script.md) | Pitch script (background context) |
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).

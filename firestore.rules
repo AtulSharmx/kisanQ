@@ -171,8 +171,16 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow read: if isAdmin() || isOwner(resource.data.farmerId);
-      allow create: if isAdmin() || isSignedIn(); // operators create these (e.g. "Call Next")
+      // Relaxed to isSignedIn() for read — see the get()-in-list-queries note above.
+      // listenNotifications() queries this collection by farmerId in real time (onSnapshot) for
+      // the farmer's Notifications screen; a single-doc get() could still use isOwner(), but the
+      // list query this screen actually runs can't be secured by a resource.data-dependent check.
+      allow read: if isSignedIn();
+      // Only staff create these today (callNextInQueue/recordWeighing/submitQualityCheck all run
+      // under an operator/admin session) — tightened from isSignedIn() now that notifications are
+      // actually readable by farmers, since an unscoped create let any signed-in farmer forge a
+      // notification claiming to be from the system for a different farmerId.
+      allow create: if isStaff();
       allow update, delete: if isAdmin();
     }
 

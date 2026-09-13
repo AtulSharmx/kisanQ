@@ -518,6 +518,32 @@ export function listenPaymentForProcurement(
   );
 }
 
+export interface NotificationWithId extends AppNotification {
+  id: string;
+}
+
+/**
+ * Real-time listener for a farmer's notifications, newest first — same
+ * query+onSnapshot shape as listenQueueForCentre(). Matches the farmerId+createdAt(desc)
+ * composite index already in firestore.indexes.json.
+ */
+export function listenNotifications(
+  farmerId: string,
+  onChange: (notifications: NotificationWithId[]) => void,
+  onError?: (error: Error) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, COLLECTIONS.notifications),
+    where("farmerId", "==", farmerId),
+    orderBy("createdAt", "desc")
+  );
+  return onSnapshot(
+    q,
+    (snap) => onChange(snap.docs.map((d) => ({ id: d.id, ...(d.data() as AppNotification) }))),
+    (err) => onError?.(err)
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Operator: weighing + quality check (Master Spec build order step 5)
 // ---------------------------------------------------------------------------

@@ -27,6 +27,17 @@ interface TokenDetails {
   centre: CentreWithId | null;
 }
 
+/** "2026-09-13" -> "13 Sep 2026", for the share message only (the on-screen card keeps the raw
+ * ISO date, unchanged, matching how it's shown elsewhere in the app). */
+function formatReadableDate(iso: string): string {
+  const [year, month, day] = iso.split("-").map(Number);
+  if (!year || !month || !day) return iso;
+  const monthNames = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ];
+  return `${day} ${monthNames[month - 1]} ${year}`;
+}
+
 /**
  * Slot Booking -> Token screen (token half) — UI/UX spec screen 8. Sharing uses the native
  * share sheet (covers WhatsApp per the "shared-phone reality" note in the spec); a pixel-image
@@ -55,9 +66,16 @@ export function TokenScreen({ route, navigation }: Props) {
   const onShare = () => {
     if (!details) return;
     const { booking, slot, centre } = details;
-    Share.share({
-      message: `KisanQ token ${booking.tokenNumber} — ${centre?.name ?? ""}, ${slot?.date ?? ""} ${slot?.startTime ?? ""}-${slot?.endTime ?? ""}`,
-    }).catch(() => {});
+    const lines = [
+      "🌾 KisanQ — Procurement Token",
+      "",
+      `Token: ${booking.tokenNumber}`,
+      `Centre: ${centre?.name ?? "-"}`,
+    ];
+    if (slot) {
+      lines.push(`Date: ${formatReadableDate(slot.date)}`, `Time: ${slot.startTime} - ${slot.endTime}`);
+    }
+    Share.share({ message: lines.join("\n") }).catch(() => {});
   };
 
   const onCancelBooking = async () => {

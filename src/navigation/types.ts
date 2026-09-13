@@ -13,5 +13,6 @@ export type RootStackParamList = {
   Token: { bookingId: string };
   LiveQueue: undefined;
   ProcurementStatus: undefined;
-  ComingSoon: { titleKey: "homeMyProduce" | "homePayment" | "homeNotifications" };
+  Notifications: undefined;
+  ComingSoon: { titleKey: "homeMyProduce" | "homePayment" };
 };

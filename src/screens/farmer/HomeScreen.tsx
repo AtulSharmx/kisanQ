@@ -65,7 +65,7 @@ export function HomeScreen({ navigation }: Props) {
         <IconTile
           icon="🔔"
           label={t("homeNotifications")}
-          onPress={() => navigation.navigate("ComingSoon", { titleKey: "homeNotifications" })}
+          onPress={() => navigation.navigate("Notifications")}
         />
       </View>
 

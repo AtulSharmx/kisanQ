@@ -11,4 +11,6 @@ export type OperatorStackParamList = {
     expectedQuantity: number;
     actualWeight: number;
   };
+  AdminOverview: undefined;
+  AdminDrilldown: undefined;
 };

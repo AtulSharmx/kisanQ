@@ -165,3 +165,21 @@ plugins, etc.) rather than relying on older training knowledge.
   `get()` on `bookings/{bookingId}`, single-document context, not a list query — see
   `isOperatorForBooking()` in `firestore.rules`), since procurement docs don't carry their own
   centreId.
+- **`OperatorNavigator.tsx` branches by `session.role`**, not just by whether a session exists:
+  `"admin"` renders [`AdminOverviewScreen`](src/screens/admin/AdminOverviewScreen.tsx)/
+  [`AdminDrilldownScreen`](src/screens/admin/AdminDrilldownScreen.tsx), anything else renders
+  the Operator scan/queue/weighing stack. Both roles share the same `StaffLogin` screen and
+  `OperatorProvider` session — there's no separate admin login flow.
+- **Admin Dashboard** ([`getAdminOverview()`](src/services/firestoreService.ts),
+  `getAdminCentreBreakdown()`) does full, unfiltered collection reads (all farmers, all
+  bookings, all queue docs) with **no `where` filter at all** — that's exactly the shape of
+  query the get()-in-list-queries limitation above does *not* break, because `isStaff()`
+  doesn't depend on `resource.data`; it's a constant per requester, true or false for every
+  document in the collection alike, and Cloud Firestore accepts that as provably secure for a
+  list. That's different from `isOperatorForCentre(resource.data.centreId)`, which needed a
+  matching query filter and *still* wasn't securable as a list rule (see above) — don't assume
+  the two situations generalize the same way if you add more admin-side queries.
+- These reads are one-time (`getDocs`, no `onSnapshot`) since the Admin Dashboard isn't
+  real-time per the Master Spec, and are all-time counts, not scoped to "today" — see the
+  comment above `getAdminOverview()` for why. `OVERLOAD_THRESHOLD_PCT` (80%) is a chosen value,
+  not a spec number ("above a threshold" is all the UI/UX spec says).

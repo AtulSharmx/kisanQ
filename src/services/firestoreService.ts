@@ -586,3 +586,101 @@ export async function submitQualityCheck(input: QualityCheckInput): Promise<void
     tx.set(notificationRef, notification);
   });
 }
+
+// ---------------------------------------------------------------------------
+// Admin: overview + district->centre drill-down (Master Spec build order step 6)
+// "Mock data is acceptable here" per the Master Spec, so these are one-time reads (no
+// real-time listeners) over the full collections — fine at demo scale, not meant to scale to
+// a real deployment's data volume. `totalBookings`/`completedBookings` are all-time counts:
+// a booking doc doesn't carry its own date (only its linked slot does), so "today's bookings"
+// would need an extra join per booking — a reasonable simplification for a non-differentiator
+// screen, not an oversight.
+// ---------------------------------------------------------------------------
+
+/** Centre is flagged "overloaded" above this booking-count-vs-dailyCapacity percentage. */
+export const OVERLOAD_THRESHOLD_PCT = 80;
+
+export interface AdminOverview {
+  totalCentres: number;
+  totalFarmers: number;
+  totalBookings: number;
+  completedBookings: number;
+  currentlyWaiting: number;
+  averageWaitMinutes: number;
+}
+
+export async function getAdminOverview(): Promise<AdminOverview> {
+  const [centresSnap, farmersSnap, bookingsSnap, queueSnap] = await Promise.all([
+    getDocs(collection(db, COLLECTIONS.centres)),
+    getDocs(collection(db, COLLECTIONS.farmers)),
+    getDocs(collection(db, COLLECTIONS.bookings)),
+    getDocs(collection(db, COLLECTIONS.queue)),
+  ]);
+
+  const bookings = bookingsSnap.docs.map((d) => d.data() as Booking);
+  const waiting = queueSnap.docs
+    .map((d) => d.data() as QueueEntry)
+    .filter((q) => q.status === "waiting");
+
+  return {
+    totalCentres: centresSnap.size,
+    totalFarmers: farmersSnap.size,
+    totalBookings: bookings.length,
+    completedBookings: bookings.filter((b) => b.status === "completed").length,
+    currentlyWaiting: waiting.length,
+    averageWaitMinutes: waiting.length
+      ? Math.round(
+          waiting.reduce((sum, q) => sum + q.estimatedWaitMinutes, 0) / waiting.length
+        )
+      : 0,
+  };
+}
+
+export interface CentreBreakdown {
+  centre: CentreWithId;
+  bookings: number;
+  completed: number;
+  waiting: number;
+  averageWaitMinutes: number;
+  utilizationPct: number;
+  overloaded: boolean;
+}
+
+/** Per-centre stats for the District -> Centre drill-down table, grouped by district by the caller. */
+export async function getAdminCentreBreakdown(): Promise<CentreBreakdown[]> {
+  const [centresSnap, bookingsSnap, queueSnap] = await Promise.all([
+    getDocs(collection(db, COLLECTIONS.centres)),
+    getDocs(collection(db, COLLECTIONS.bookings)),
+    getDocs(collection(db, COLLECTIONS.queue)),
+  ]);
+
+  const centres = centresSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Centre) }));
+  const bookings = bookingsSnap.docs.map((d) => d.data() as Booking);
+  const queueEntries = queueSnap.docs.map((d) => d.data() as QueueEntry);
+
+  return centres.map((centre) => {
+    const centreBookings = bookings.filter((b) => b.centreId === centre.id);
+    const centreWaiting = queueEntries.filter(
+      (q) => q.centreId === centre.id && q.status === "waiting"
+    );
+    const utilizationPct =
+      centre.dailyCapacity > 0
+        ? Math.round((centreBookings.length / centre.dailyCapacity) * 100)
+        : 0;
+
+    return {
+      centre,
+      bookings: centreBookings.length,
+      completed: centreBookings.filter((b) => b.status === "completed").length,
+      waiting: centreWaiting.length,
+      averageWaitMinutes: centreWaiting.length
+        ? Math.round(
+            centreWaiting.reduce((sum, q) => sum + q.estimatedWaitMinutes, 0) /
+              centreWaiting.length
+          )
+        : 0,
+      utilizationPct,
+      overloaded: utilizationPct > OVERLOAD_THRESHOLD_PCT,
+    };
+  });
+}

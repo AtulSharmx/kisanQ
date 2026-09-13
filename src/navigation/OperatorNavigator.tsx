@@ -8,6 +8,8 @@ import { ScanCheckInScreen } from "../screens/operator/ScanCheckInScreen";
 import { LiveQueueManagementScreen } from "../screens/operator/LiveQueueManagementScreen";
 import { WeighingScreen } from "../screens/operator/WeighingScreen";
 import { QualityCheckScreen } from "../screens/operator/QualityCheckScreen";
+import { AdminOverviewScreen } from "../screens/admin/AdminOverviewScreen";
+import { AdminDrilldownScreen } from "../screens/admin/AdminDrilldownScreen";
 import { colors } from "../theme";
 
 const Stack = createNativeStackNavigator<OperatorStackParamList>();
@@ -23,13 +25,22 @@ export function OperatorNavigator() {
     );
   }
 
-  // Two separate trees (rather than one Navigator with a fixed initialRouteName) so logging
-  // out actually returns to the login screen instead of just sitting on whatever screen was
-  // last open.
+  // Three separate trees (rather than one Navigator with a fixed initialRouteName) so logging
+  // out — or logging in as a different role — actually lands on the right screen instead of
+  // just sitting on whatever screen was last open.
   if (!session) {
     return (
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="StaffLogin" component={StaffLoginScreen} />
+      </Stack.Navigator>
+    );
+  }
+
+  if (session.role === "admin") {
+    return (
+      <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="AdminOverview">
+        <Stack.Screen name="AdminOverview" component={AdminOverviewScreen} />
+        <Stack.Screen name="AdminDrilldown" component={AdminDrilldownScreen} />
       </Stack.Navigator>
     );
   }

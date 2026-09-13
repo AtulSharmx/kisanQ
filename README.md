@@ -97,3 +97,11 @@ both behind a confirm dialog, per UI/UX spec principle 9). Reject records
 `procurementStatus: "rejected"` with a reason and no payment obligation, per Missing Details
 Polish sec. 8; either outcome closes out the booking and queue entry. Both screens push the
 exact-copy Hindi notifications from Missing Details Polish sec. 1.
+
+**Admin Dashboard** (build order step 6), on the web build — log in with `staff-admin-1` / PIN
+`9999` (the same Staff Login screen operators use; role decides which surface you land on):
+Overview (total centres/farmers/bookings/completed/currently-waiting/avg-wait as cards) →
+District → Centre drill-down (a table grouped by district, flagging centres over 80% of daily
+capacity). One-time reads, not real-time — this isn't the product's differentiator, so "mock
+data is acceptable" per the Master Spec, though these actually read live Firestore counts
+rather than truly mocked numbers.

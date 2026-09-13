@@ -70,7 +70,7 @@ async function seed() {
     },
   ];
 
-  for (const { id, code, location, ...centre } of centres) {
+  for (const { id, location, ...centre } of centres) {
     await db
       .collection("centres")
       .doc(id)

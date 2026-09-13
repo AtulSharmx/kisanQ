@@ -90,7 +90,23 @@ plugins, etc.) rather than relying on older training knowledge.
 - Firestore document types for every collection in the data model live in
   [`src/types/firestore.ts`](src/types/firestore.ts).
 - Security rules matching section 7 of `KisanQ_Missing_Details_Polish.md` live in
-  [`firestore.rules`](firestore.rules).
+  [`firestore.rules`](firestore.rules) — redeploy after editing them
+  (`npx firebase deploy --only firestore:rules,firestore:indexes`).
 - Demo seed data (centres, slots, sample bookings) lives in
   [`scripts/seed.ts`](scripts/seed.ts) — run with `npm run seed` after real Firebase config is
   in place.
+- **Identity model:** the mocked Aadhaar+OTP flow never mints a real auth token, but
+  firestore.rules still need a real `request.auth` to scope access by owner/role instead of
+  trusting the client. [`src/lib/firebase.ts`](src/lib/firebase.ts) signs every device in with
+  Firebase **Anonymous** Auth on launch (invisible to the user), and that uid becomes the
+  farmerId once registration succeeds — see [`src/context/FarmerContext.tsx`](src/context/FarmerContext.tsx).
+  Anonymous auth must be enabled in Firebase Console → Authentication → Sign-in method.
+- Farmer App screens live in [`src/screens/farmer/`](src/screens/farmer/), navigated by
+  [`src/navigation/AppNavigator.tsx`](src/navigation/AppNavigator.tsx) (React Navigation native
+  stack). Firestore reads/writes for the registration→token flow are centralized in
+  [`src/services/firestoreService.ts`](src/services/firestoreService.ts) — add new
+  screen-specific Firestore calls there rather than calling `firebase/firestore` directly from
+  a screen component.
+- Bilingual strings (Hindi default) live in [`src/i18n/strings.ts`](src/i18n/strings.ts); add
+  new UI copy there using the exact wording from the docs rather than inline strings in a
+  screen.

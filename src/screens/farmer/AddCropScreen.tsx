@@ -1,0 +1,104 @@
+import React, { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { RootStackParamList } from "../../navigation/types";
+import { colors, fontSize, radius, spacing, touchTarget } from "../../theme";
+import { useLanguage } from "../../context/LanguageContext";
+import { ScreenContainer } from "../../components/ScreenContainer";
+import { PrimaryButton } from "../../components/PrimaryButton";
+
+type Props = NativeStackScreenProps<RootStackParamList, "AddCrop">;
+
+const CROPS = [
+  { key: "wheat", icon: "🌾", labelHi: "गेहूं", labelEn: "Wheat" },
+  { key: "paddy", icon: "🌾", labelHi: "धान", labelEn: "Paddy" },
+];
+
+/**
+ * Add Crop / Produce — UI/UX spec screen 6. Date is fixed to today for this pass, since the
+ * booking model only has slot data seeded for the current date (Missing Details Polish sec.
+ * 9) — a real date picker would just show empty slots for any other day right now.
+ */
+export function AddCropScreen({ navigation }: Props) {
+  const { t, lang } = useLanguage();
+  const [cropType, setCropType] = useState<string | null>(null);
+  const [quantity, setQuantity] = useState(20);
+
+  return (
+    <ScreenContainer>
+      <Text style={styles.title}>{t("addCropTitle")}</Text>
+
+      <View style={styles.cropRow}>
+        {CROPS.map((c) => (
+          <Pressable
+            key={c.key}
+            onPress={() => setCropType(c.key)}
+            style={[styles.cropCard, cropType === c.key && styles.cropCardActive]}
+          >
+            <Text style={styles.cropIcon}>{c.icon}</Text>
+            <Text style={styles.cropLabel}>{lang === "hi" ? c.labelHi : c.labelEn}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <Text style={styles.label}>{t("cropQuantityLabel")}</Text>
+      <View style={styles.stepper}>
+        <Pressable style={styles.stepBtn} onPress={() => setQuantity((q) => Math.max(1, q - 5))}>
+          <Text style={styles.stepBtnText}>−</Text>
+        </Pressable>
+        <Text style={styles.quantityValue}>{quantity}</Text>
+        <Pressable style={styles.stepBtn} onPress={() => setQuantity((q) => q + 5)}>
+          <Text style={styles.stepBtnText}>+</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.spacer} />
+      <PrimaryButton
+        label={t("checkSlotsBtn")}
+        onPress={() =>
+          cropType &&
+          navigation.navigate("CentreSelection", { cropType, expectedQuantity: quantity })
+        }
+        disabled={!cropType}
+      />
+    </ScreenContainer>
+  );
+}
+
+const styles = StyleSheet.create({
+  title: { fontSize: fontSize.header, fontWeight: "800", color: colors.text, marginBottom: spacing.lg },
+  cropRow: { flexDirection: "row", gap: spacing.md, marginBottom: spacing.xl },
+  cropCard: {
+    flex: 1,
+    minHeight: touchTarget * 1.5,
+    borderRadius: radius.lg,
+    borderWidth: 2,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+  },
+  cropCardActive: { borderColor: colors.primary, backgroundColor: "#E7F3EC" },
+  cropIcon: { fontSize: 40 },
+  cropLabel: { fontSize: fontSize.label, fontWeight: "700", color: colors.text },
+  label: { fontSize: fontSize.body, color: colors.textMuted, marginBottom: spacing.sm },
+  stepper: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.lg },
+  stepBtn: {
+    width: touchTarget,
+    height: touchTarget,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepBtnText: { color: colors.white, fontSize: 28, fontWeight: "700", lineHeight: 30 },
+  quantityValue: {
+    fontSize: fontSize.display,
+    fontWeight: "800",
+    color: colors.text,
+    minWidth: 70,
+    textAlign: "center",
+  },
+  spacer: { height: spacing.xl },
+});

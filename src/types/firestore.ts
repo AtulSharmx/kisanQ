@@ -41,9 +41,15 @@ export interface Crop {
 
 export type CentreStatus = "active" | "inactive";
 
-/** centres/{centreId} */
+/**
+ * centres/{centreId}
+ * `code` is not listed in the Master Spec's field list but is required to build the documented
+ * token format `[Centre code]-[4-digit sequential number]` (KisanQ_Missing_Details_Polish.md
+ * section 4) — added here for that reason.
+ */
 export interface Centre {
   name: string;
+  code: string;
   district: string;
   location: GeoPoint;
   dailyCapacity: number;
@@ -160,6 +166,16 @@ export interface Staff {
   assignedCentreId: string | null; // required for operators, null for admin
 }
 
+/**
+ * tokenCounters/{centreId_date}
+ * Not in the Master Spec's collection list — added to generate the documented token format
+ * `[Centre code]-[4-digit sequential number, resets daily]` atomically (one doc per centre
+ * per day, incremented in a transaction).
+ */
+export interface TokenCounter {
+  count: number;
+}
+
 export const COLLECTIONS = {
   farmers: "farmers",
   identityVerification: "identityVerification",
@@ -171,5 +187,6 @@ export const COLLECTIONS = {
   procurement: "procurement",
   payments: "payments",
   notifications: "notifications",
+  tokenCounters: "tokenCounters",
   staff: "staff",
 } as const;

@@ -7,11 +7,14 @@ rules_version = '2';
 //     at their assigned centre.
 //   - Admin has read access across all collections, write access only to centres/ management.
 //
-// Assumption (not yet confirmed in the spec docs): the farmer's Firebase Auth uid equals
-// their farmerId (e.g. minted via a custom token right after the mocked Aadhaar+OTP flow
-// succeeds), and staff sign in with Firebase Auth too, with a custom claim `role` of
-// "operator" or "admin" and, for operators, a `centreId` claim. Revisit this once the real
-// auth flow is implemented.
+// Identity model: the mocked Aadhaar+OTP flow (Master Spec sec. 2) never touches a real UIDAI
+// API and never mints a custom token, but these rules still need *some* real request.auth to
+// scope access by role instead of trusting the client UI. So the app signs the device in with
+// Firebase Anonymous Auth right at launch (invisible to the user) and uses that uid as the
+// farmerId once Aadhaar+OTP succeeds — see src/context/FarmerContext.tsx. Staff (operator/
+// admin) sign-in is a later build step; until a Cloud Function mints their `role`/`centreId`
+// custom claims on staff login, isAdmin()/isOperatorForCentre() below will simply never match,
+// which is intentionally fail-closed rather than fail-open.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -31,6 +34,19 @@ service cloud.firestore {
       return isSignedIn()
         && request.auth.token.role == 'operator'
         && request.auth.token.centreId == centreId;
+    }
+
+    function bookingFarmerId(bookingId) {
+      return get(/databases/$(database)/documents/bookings/$(bookingId)).data.farmerId;
+    }
+
+    function ownsBooking(bookingId) {
+      return isSignedIn() && request.auth.uid == bookingFarmerId(bookingId);
+    }
+
+    function ownsProcurement(procurementId) {
+      let bookingId = get(/databases/$(database)/documents/procurement/$(procurementId)).data.bookingId;
+      return ownsBooking(bookingId);
     }
 
     match /farmers/{farmerId} {
@@ -58,6 +74,14 @@ service cloud.firestore {
       allow write: if isAdmin() || isOperatorForCentre(resource.data.centreId);
     }
 
+    match /tokenCounters/{counterId} {
+      // Not farmer/admin/operator data — just an internal daily sequence per centre, bumped
+      // inside the same transaction that creates a booking. Anyone signed in may increment it,
+      // but there is nothing sensitive to read here.
+      allow read: if false;
+      allow write: if isSignedIn();
+    }
+
     match /bookings/{bookingId} {
       allow read: if isAdmin()
         || (isSignedIn() && request.auth.uid == resource.data.farmerId)
@@ -67,19 +91,20 @@ service cloud.firestore {
     }
 
     match /queue/{queueId} {
-      allow read: if isAdmin() || isSignedIn(); // farmer reads via a query filtered to their booking
+      allow read: if isAdmin() || isOperatorForCentre(resource.data.centreId)
+        || ownsBooking(resource.data.bookingId);
       allow write: if isAdmin() || isOperatorForCentre(resource.data.centreId)
         || isOperatorForCentre(request.resource.data.centreId);
     }
 
     match /procurement/{procurementId} {
-      allow read: if isAdmin() || isSignedIn(); // farmer reads via a query filtered to their booking
-      allow write: if isAdmin() || isSignedIn(); // narrowed to assigned-centre operators once
-                                                  // procurement docs carry a centreId field
+      allow read: if isAdmin() || ownsBooking(resource.data.bookingId);
+      allow write: if isAdmin(); // narrowed to assigned-centre operators once procurement
+                                  // docs carry a centreId field
     }
 
     match /payments/{paymentId} {
-      allow read: if isAdmin() || isSignedIn(); // farmer reads via a query filtered to their procurement
+      allow read: if isAdmin() || ownsProcurement(resource.data.procurementId);
       allow write: if isAdmin();
     }
 

@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
-import { colors, fontSize, radius, spacing } from "../../theme";
+import { colors, fontSize, radius, spacing, touchTarget } from "../../theme";
 import { useLanguage } from "../../context/LanguageContext";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { ScreenContainer } from "../../components/ScreenContainer";
@@ -46,7 +46,7 @@ export function ProfileConfirmScreen({ route, navigation }: Props) {
         onPress={() => Alert.alert(t("wrongInfoLink"))}
         style={styles.wrongInfo}
       >
-        <Text style={styles.wrongInfoText}>{t("wrongInfoLink")}</Text>
+        <Text style={styles.wrongInfoText}>✏️ {t("wrongInfoLink")}</Text>
       </Pressable>
     </ScreenContainer>
   );
@@ -66,6 +66,11 @@ const styles = StyleSheet.create({
   rowLabel: { fontSize: fontSize.body, color: colors.textMuted },
   rowValue: { fontSize: fontSize.body, fontWeight: "700", color: colors.text },
   spacer: { height: spacing.xl },
-  wrongInfo: { marginTop: spacing.lg, alignItems: "center" },
+  wrongInfo: {
+    marginTop: spacing.lg,
+    minHeight: touchTarget,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   wrongInfoText: { color: colors.primary, fontSize: fontSize.body, textDecorationLine: "underline" },
 });

@@ -105,3 +105,12 @@ District → Centre drill-down (a table grouped by district, flagging centres ov
 capacity). One-time reads, not real-time — this isn't the product's differentiator, so "mock
 data is acceptable" per the Master Spec, though these actually read live Firestore counts
 rather than truly mocked numbers.
+
+**Farmer App UI polish pass** (build order step 7): audited every Farmer screen against the
+UI/UX spec's design principles and fixed the real gaps found — no new screens or features.
+Selection state (crop pickers, centre list, time slots) previously relied on border colour
+alone; every selectable card/row now also shows a `✓` so colour-blind or bright-sunlight
+viewing doesn't lose the signal. Two action links (OTP fingerprint fallback, "wrong info?" on
+Profile Confirm) had a tap target smaller than the ~50dp minimum (just the text's own bounding
+box) — both now have a proper `minHeight`. Touch targets, icon+text status pairing, contrast,
+and the Additional Info 3-step progress dots were otherwise already compliant.

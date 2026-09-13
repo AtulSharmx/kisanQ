@@ -36,7 +36,10 @@ export function StepCropScreen({ route, navigation }: Props) {
             style={[styles.cropCard, cropType === c.key && styles.cropCardActive]}
           >
             <Text style={styles.cropIcon}>{c.icon}</Text>
-            <Text style={styles.cropLabel}>{lang === "hi" ? c.labelHi : c.labelEn}</Text>
+            <Text style={styles.cropLabel}>
+              {cropType === c.key ? "✓ " : ""}
+              {lang === "hi" ? c.labelHi : c.labelEn}
+            </Text>
           </Pressable>
         ))}
       </View>

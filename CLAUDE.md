@@ -183,3 +183,12 @@ plugins, etc.) rather than relying on older training knowledge.
   real-time per the Master Spec, and are all-time counts, not scoped to "today" — see the
   comment above `getAdminOverview()` for why. `OVERLOAD_THRESHOLD_PCT` (80%) is a chosen value,
   not a spec number ("above a threshold" is all the UI/UX spec says).
+- **Selection state needs a non-colour signal, not just a border/background colour change.**
+  An audit for the Farmer App UI polish pass (build order step 7) found several selectable
+  cards/rows (crop pickers, centre list, time slots) that only changed border colour when
+  selected — a real violation of design principle 4. The fix used everywhere: prefix the
+  label/name with `✓ ` when selected, rather than adding a separate badge/icon component —
+  keep using that same convention for any new selectable card so it stays consistent. Also
+  fixed: two action-link `Pressable`s (OTP fingerprint fallback, Profile Confirm "wrong info?")
+  had no `minHeight`, so their tap target was just the text's bounding box, under the ~50dp
+  minimum — give any bare text-link `Pressable` an explicit `minHeight: touchTarget`.

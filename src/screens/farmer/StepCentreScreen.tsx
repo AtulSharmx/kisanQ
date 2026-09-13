@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { CommonActions } from "@react-navigation/native";
 import { Timestamp } from "firebase/firestore";
@@ -88,8 +88,11 @@ export function StepCentreScreen({ route, navigation }: Props) {
             style={[styles.item, selected === item.id && styles.itemActive]}
             onPress={() => setSelected(item.id)}
           >
-            <Text style={styles.itemName}>{item.name}</Text>
-            <Text style={styles.itemDistrict}>{item.district}</Text>
+            <View>
+              <Text style={styles.itemName}>{item.name}</Text>
+              <Text style={styles.itemDistrict}>{item.district}</Text>
+            </View>
+            {selected === item.id && <Text style={styles.checkmark}>✓</Text>}
           </Pressable>
         )}
       />
@@ -109,7 +112,9 @@ const styles = StyleSheet.create({
   title: { fontSize: fontSize.header, fontWeight: "800", color: colors.text, marginBottom: spacing.md },
   item: {
     minHeight: 60,
-    justifyContent: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: spacing.md,
     borderRadius: radius.md,
     borderWidth: 2,
@@ -120,5 +125,6 @@ const styles = StyleSheet.create({
   itemActive: { borderColor: colors.primary, backgroundColor: "#E7F3EC" },
   itemName: { fontSize: fontSize.label, fontWeight: "700", color: colors.text },
   itemDistrict: { fontSize: fontSize.body, color: colors.textMuted },
+  checkmark: { fontSize: fontSize.header, fontWeight: "800", color: colors.primary },
   error: { color: colors.error, textAlign: "center", marginBottom: spacing.sm },
 });

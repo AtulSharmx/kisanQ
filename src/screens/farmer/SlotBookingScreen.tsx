@@ -73,6 +73,7 @@ export function SlotBookingScreen({ route, navigation }: Props) {
               ]}
             >
               <Text style={[styles.slotText, full && styles.slotTextFull]}>
+                {selected === slot.id ? "✓ " : ""}
                 {slot.startTime} - {slot.endTime}
               </Text>
             </Pressable>

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
-import { colors, fontSize, spacing } from "../../theme";
+import { colors, fontSize, spacing, touchTarget } from "../../theme";
 import { useLanguage } from "../../context/LanguageContext";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { ScreenContainer } from "../../components/ScreenContainer";
@@ -70,10 +70,10 @@ export function OtpScreen({ route, navigation }: Props) {
       </Pressable>
 
       {verifyingFingerprint ? (
-        <Text style={styles.fingerprintStatus}>{t("verifyingFingerprint")}</Text>
+        <Text style={styles.fingerprintStatus}>👆 {t("verifyingFingerprint")}</Text>
       ) : (
-        <Pressable onPress={onFingerprintFallback}>
-          <Text style={styles.fallbackLink}>{t("otpFailFallback")}</Text>
+        <Pressable onPress={onFingerprintFallback} style={styles.fallbackRow}>
+          <Text style={styles.fallbackLink}>👆 {t("otpFailFallback")}</Text>
         </Pressable>
       )}
     </ScreenContainer>
@@ -87,11 +87,21 @@ const styles = StyleSheet.create({
   error: { color: colors.error, textAlign: "center", marginTop: spacing.sm },
   demoHint: { textAlign: "center", color: colors.textMuted, marginTop: spacing.sm },
   spacer: { height: spacing.lg },
-  resendRow: { marginTop: spacing.lg, alignItems: "center" },
+  resendRow: {
+    marginTop: spacing.lg,
+    minHeight: touchTarget,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   resend: { color: colors.primary, fontSize: fontSize.body, fontWeight: "700" },
   resendDisabled: { color: colors.textMuted },
-  fallbackLink: {
+  fallbackRow: {
     marginTop: spacing.xl,
+    minHeight: touchTarget,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fallbackLink: {
     textAlign: "center",
     color: colors.primary,
     fontSize: fontSize.body,

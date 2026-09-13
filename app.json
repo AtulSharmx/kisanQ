@@ -20,6 +20,14 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "KisanQ needs camera access so operators can scan a farmer's token QR code at check-in."
+        }
+      ]
+    ]
   }
 }

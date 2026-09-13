@@ -76,13 +76,19 @@ export type BookingStatus =
 /**
  * bookings/{bookingId}
  * tokenNumber format: `[Centre code]-[4-digit sequential number, resets daily]`, e.g. "KSN-1048".
+ * `cropId` and `checkedInByStaffId` aren't in the Master Spec's field list — `cropId` links the
+ * booking to the crops/ doc the operator needs to see at check-in (the spec's crops collection
+ * has no bookingId of its own, so something has to bridge them), and `checkedInByStaffId` is an
+ * audit-trail field consistent with the Winning Strategy doc's "timestamped trail" narrative.
  */
 export interface Booking {
   farmerId: string;
   centreId: string;
   slotId: string;
+  cropId: string;
   tokenNumber: string;
   status: BookingStatus;
+  checkedInByStaffId?: string;
 }
 
 export type QueueStatus = "waiting" | "processing" | "completed";
@@ -176,6 +182,35 @@ export interface TokenCounter {
   count: number;
 }
 
+/**
+ * queuePositionCounters/{centreId_date}
+ * Not in the Master Spec's collection list — same pattern as tokenCounters, but for the
+ * queue/{queueId}.position sequence assigned at check-in (separate sequence from token
+ * numbers, since a booking can go un-checked-in / no-show and never get a queue position).
+ */
+export interface QueuePositionCounter {
+  count: number;
+}
+
+/**
+ * staffSessions/{authUid}
+ * Not in the Master Spec's collection list. The mocked Staff ID + PIN login never mints a real
+ * auth token, but firestore.rules still need *some* real request.auth to scope operator/admin
+ * access. This doc lets an anonymously-signed-in device "claim" a staff identity — the rules
+ * cross-check role/assignedCentreId here against the authoritative staff/{staffId} doc (which
+ * only an admin can write) before trusting it, so a session can't self-declare a role a real
+ * staff record doesn't have. What it can't stop is a technically-savvy client skipping the PIN
+ * check UI and writing this doc directly if they already know/guess a valid staffId — closing
+ * that gap for real would need a Cloud Function (or another server-side check) to verify the
+ * PIN before minting the session, which is out of scope for this prototype. See
+ * src/context/OperatorContext.tsx.
+ */
+export interface StaffSession {
+  staffId: string;
+  role: StaffRole;
+  assignedCentreId: string | null;
+}
+
 export const COLLECTIONS = {
   farmers: "farmers",
   identityVerification: "identityVerification",
@@ -188,5 +223,7 @@ export const COLLECTIONS = {
   payments: "payments",
   notifications: "notifications",
   tokenCounters: "tokenCounters",
+  queuePositionCounters: "queuePositionCounters",
   staff: "staff",
+  staffSessions: "staffSessions",
 } as const;

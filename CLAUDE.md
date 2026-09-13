@@ -110,3 +110,25 @@ plugins, etc.) rather than relying on older training knowledge.
 - Bilingual strings (Hindi default) live in [`src/i18n/strings.ts`](src/i18n/strings.ts); add
   new UI copy there using the exact wording from the docs rather than inline strings in a
   screen.
+- **App routes by `Platform.OS`** (`App.tsx`): web → Operator/Admin (`OperatorNavigator`),
+  native → Farmer App (`AppNavigator`) — matches the Master Spec's "same codebase, web build"
+  architecture without an extra mode-switcher screen the docs never mention.
+- **Operator identity model:** Staff ID + PIN login never mints a real auth token either. The
+  device signs in anonymously (same mechanism as farmers) and, on successful login, writes
+  `staffSessions/{uid}` claiming a role + centreId — firestore.rules cross-checks that claim
+  against the real `staff/{staffId}` doc before trusting it. See
+  [`src/context/OperatorContext.tsx`](src/context/OperatorContext.tsx) and the long identity-model
+  comment at the top of [`firestore.rules`](firestore.rules).
+- **Hard-won Firestore limitation, worth knowing before writing more queries:** security rules
+  that call `get()`/`exists()` (the only way to check a role without a real custom claim) do
+  **not** work to secure *list/collection queries* — only single-document `get()`/write
+  requests. `bookings`, `crops`, and `queue` therefore have their **read** rule relaxed to
+  `isSignedIn()` (writes stay properly scoped via `get()`-based checks, since writes are always
+  single-document). This is a real, documented gap for the prototype — the correct fix is a
+  Cloud Function that mints real custom claims on staff login, which needs the Blaze plan and
+  is out of scope here. Don't "fix" this by adding a `get()`-based OR-branch to one of those
+  read rules — it will silently break every list query on that collection again.
+- PIN hashing ([`src/services/pinAuth.ts`](src/services/pinAuth.ts)) is plain SHA-256, no salt —
+  `scripts/seed.ts` hashes the demo PINs the same way (Node's `crypto.createHash`) so seeded
+  accounts can log in. Demo credentials: `staff-op-1` / PIN `1234` (operator), `staff-admin-1` /
+  PIN `9999` (admin, not yet used by any screen).

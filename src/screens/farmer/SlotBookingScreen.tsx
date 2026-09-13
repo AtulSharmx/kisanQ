@@ -17,7 +17,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "SlotBooking">;
 
 /** Slot Booking -> Token — UI/UX spec screen 8 (booking half). */
 export function SlotBookingScreen({ route, navigation }: Props) {
-  const { centreId } = route.params;
+  const { centreId, cropId } = route.params;
   const { t } = useLanguage();
   const { farmerId } = useFarmer();
   const [slots, setSlots] = useState<SlotWithId[] | null>(null);
@@ -34,7 +34,7 @@ export function SlotBookingScreen({ route, navigation }: Props) {
     setBooking(true);
     setError(null);
     try {
-      const result = await createBooking({ farmerId, centreId, slotId: selected });
+      const result = await createBooking({ farmerId, centreId, slotId: selected, cropId });
       navigation.replace("Token", { bookingId: result.bookingId });
     } catch (e) {
       console.error(e);

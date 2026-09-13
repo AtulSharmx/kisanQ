@@ -17,6 +17,13 @@ import { initializeApp, cert } from "firebase-admin/app";
 import { getFirestore, GeoPoint, FieldValue } from "firebase-admin/firestore";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
+
+// Matches src/services/pinAuth.ts (plain SHA-256, no salt — good enough to keep PINs out of
+// plaintext in a prototype, not a production-grade credential store).
+function hashPin(pin: string): string {
+  return createHash("sha256").update(pin.trim(), "utf-8").digest("hex");
+}
 
 const serviceAccountPath = join(__dirname, "..", "serviceAccountKey.json");
 
@@ -127,6 +134,14 @@ async function seed() {
         createdAt: FieldValue.serverTimestamp(),
       });
 
+    const cropId = `crop-demo-${i}`;
+    await db.collection("crops").doc(cropId).set({
+      farmerId: f.id,
+      cropType: i % 2 === 0 ? "wheat" : "paddy",
+      expectedQuantity: 20,
+      preferredCentreId: demoCentre.id,
+    });
+
     const bookingId = `booking-demo-${i}`;
     await db
       .collection("bookings")
@@ -135,6 +150,7 @@ async function seed() {
         farmerId: f.id,
         centreId: demoCentre.id,
         slotId: demoSlotId,
+        cropId,
         tokenNumber: f.token,
         status: "arrived",
       });
@@ -165,10 +181,18 @@ async function seed() {
       createdAt: FieldValue.serverTimestamp(),
     });
 
+  await db.collection("crops").doc("crop-demo-live").set({
+    farmerId: "farmer-demo-live",
+    cropType: "wheat",
+    expectedQuantity: 25,
+    preferredCentreId: demoCentre.id,
+  });
+
   await db.collection("bookings").doc("booking-demo-live").set({
     farmerId: "farmer-demo-live",
     centreId: demoCentre.id,
     slotId: demoSlotId,
+    cropId: "crop-demo-live",
     tokenNumber: "KSN-1048",
     status: "arrived",
   });
@@ -181,15 +205,58 @@ async function seed() {
     estimatedWaitMinutes: 2 * 8,
   });
 
-  console.log("Seeding one staff account (operator, assigned to the demo centre)...");
+  // Seed data assigns queue positions 1-3 directly rather than through checkInBooking()'s
+  // queuePositionCounters transaction — this counter has to be primed to match, or the next
+  // *real* check-in via the app would also compute position 1 and collide with Ramesh Kumar.
+  await db
+    .collection("queuePositionCounters")
+    .doc(`${demoCentre.id}_${today}`)
+    .set({ count: 3 });
+
+  // Not checked in yet — lets an operator test the Scan/Check-in screen against a real token.
+  console.log("Seeding one not-yet-arrived booking for testing operator check-in...");
+  await db.collection("farmers").doc("farmer-demo-notarrived").set({
+    name: "Geeta Devi",
+    mobile: "9876543098",
+    verificationStatus: "verified",
+    village: "Demo Village",
+    district: demoCentre.district,
+    state: "Haryana",
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  await db.collection("crops").doc("crop-demo-notarrived").set({
+    farmerId: "farmer-demo-notarrived",
+    cropType: "paddy",
+    expectedQuantity: 18,
+    preferredCentreId: demoCentre.id,
+  });
+  await db.collection("bookings").doc("booking-demo-notarrived").set({
+    farmerId: "farmer-demo-notarrived",
+    centreId: demoCentre.id,
+    slotId: demoSlotId,
+    cropId: "crop-demo-notarrived",
+    tokenNumber: "KSN-1049",
+    status: "booked",
+  });
+
+  console.log("Seeding demo staff accounts (operator PIN 1234, admin PIN 9999)...");
   await db.collection("staff").doc("staff-op-1").set({
     name: "Demo Operator",
     role: "operator",
-    pinHash: "REPLACE_WITH_REAL_HASH", // never store a plain PIN — hash before writing
+    pinHash: hashPin("1234"),
     assignedCentreId: demoCentre.id,
   });
+  await db.collection("staff").doc("staff-admin-1").set({
+    name: "Demo Admin",
+    role: "admin",
+    pinHash: hashPin("9999"),
+    assignedCentreId: null,
+  });
 
-  console.log("Done. Demo booking token KSN-1048 has 2 people ahead of it in the queue.");
+  console.log(
+    "Done. Demo booking token KSN-1048 has 2 people ahead of it in the queue. " +
+      "Operator login: staff-op-1 / PIN 1234."
+  );
 }
 
 seed()

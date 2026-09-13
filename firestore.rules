@@ -7,14 +7,32 @@ rules_version = '2';
 //     at their assigned centre.
 //   - Admin has read access across all collections, write access only to centres/ management.
 //
-// Identity model: the mocked Aadhaar+OTP flow (Master Spec sec. 2) never touches a real UIDAI
-// API and never mints a custom token, but these rules still need *some* real request.auth to
-// scope access by role instead of trusting the client UI. So the app signs the device in with
-// Firebase Anonymous Auth right at launch (invisible to the user) and uses that uid as the
-// farmerId once Aadhaar+OTP succeeds — see src/context/FarmerContext.tsx. Staff (operator/
-// admin) sign-in is a later build step; until a Cloud Function mints their `role`/`centreId`
-// custom claims on staff login, isAdmin()/isOperatorForCentre() below will simply never match,
-// which is intentionally fail-closed rather than fail-open.
+// Identity model: neither the mocked Aadhaar+OTP flow nor the mocked Staff ID + PIN login ever
+// mints a real auth token or custom claim (no Cloud Function exists to do that), but these
+// rules still need *some* real request.auth to scope access by role instead of trusting the
+// client UI. So every device signs in with Firebase Anonymous Auth on launch (invisible to the
+// user):
+//   - A farmer's own uid becomes their farmerId once Aadhaar+OTP succeeds.
+//   - A staff member's device "claims" its identity by writing staffSessions/{uid}, which these
+//     rules cross-check against the authoritative staff/{staffId} doc (role, assignedCentreId)
+//     before trusting it — see the staffSessions match block below and
+//     src/context/OperatorContext.tsx. This stops a session from claiming a role/centre a real
+//     staff record doesn't have, but it can't stop a technically-savvy client from skipping the
+//     PIN-entry UI and writing a session directly if they already know/guess a valid staffId —
+//     genuinely closing that gap would need a Cloud Function to verify the PIN server-side
+//     before minting the session, which is out of scope for this prototype (documented
+//     limitation, not silently pretended away — consistent with the Cross-Questions doc).
+//
+// Second, separate limitation, confirmed empirically while wiring the Operator screens:
+// Cloud Firestore CANNOT secure a *list/collection query* with a rule that depends on a get()
+// call — get()-based checks only work for single-document get()/write requests. Since
+// isOperatorForCentre()/isAdmin()/ownsBooking() all call get() (there's no other way to look up
+// a role without a real custom claim, which again needs a Cloud Function we don't have), any
+// collection that the app needs to *query* — not just fetch single documents from — has its
+// read rule relaxed to "any signed-in device" below, with a comment at each spot. Writes and
+// single-document reads keep the real get()-based role checks; only list-query reads on
+// bookings/, crops/, and queue/ are affected. This is a real, deliberate gap for the prototype,
+// not an oversight — the honest fix is a Cloud Function minting real custom claims.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -26,14 +44,20 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == farmerId;
     }
 
+    function mySession() {
+      return get(/databases/$(database)/documents/staffSessions/$(request.auth.uid)).data;
+    }
+
     function isAdmin() {
-      return isSignedIn() && request.auth.token.role == 'admin';
+      return isSignedIn() && mySession().role == 'admin';
     }
 
     function isOperatorForCentre(centreId) {
-      return isSignedIn()
-        && request.auth.token.role == 'operator'
-        && request.auth.token.centreId == centreId;
+      return isSignedIn() && mySession().role == 'operator' && mySession().assignedCentreId == centreId;
+    }
+
+    function isStaff() {
+      return isSignedIn() && (mySession().role == 'operator' || mySession().role == 'admin');
     }
 
     function bookingFarmerId(bookingId) {
@@ -50,7 +74,11 @@ service cloud.firestore {
     }
 
     match /farmers/{farmerId} {
-      allow read, write: if isOwner(farmerId) || isAdmin();
+      // isStaff(), not just isAdmin(): an operator legitimately needs to read any farmer's
+      // name during check-in (this is a single-document get, so the get()-in-list-queries
+      // limitation noted above doesn't apply here).
+      allow read: if isOwner(farmerId) || isStaff();
+      allow write: if isOwner(farmerId) || isAdmin();
     }
 
     match /identityVerification/{farmerId} {
@@ -59,9 +87,12 @@ service cloud.firestore {
     }
 
     match /crops/{cropId} {
-      allow read, write: if isAdmin()
-        || (isSignedIn() && request.auth.uid == resource.data.farmerId);
+      // Relaxed to isSignedIn() for read — see the get()-in-list-queries note above.
+      // listCropsForFarmer() and the operator's future crop lookups both query this collection.
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && request.auth.uid == request.resource.data.farmerId;
+      allow update, delete: if isAdmin()
+        || (isSignedIn() && request.auth.uid == resource.data.farmerId);
     }
 
     match /centres/{centreId} {
@@ -75,26 +106,33 @@ service cloud.firestore {
     }
 
     match /tokenCounters/{counterId} {
-      // Not farmer/admin/operator data — just an internal daily sequence per centre, bumped
-      // inside the same transaction that creates a booking. Anyone signed in may increment it,
-      // but there is nothing sensitive to read here.
-      allow read: if false;
-      allow write: if isSignedIn();
+      // Not farmer/admin/operator data — just an internal daily sequence per centre, read then
+      // bumped inside the same transaction that creates a booking (the transaction's own
+      // tx.get() is still subject to this read rule, so it can't be `if false`). Nothing
+      // sensitive lives here, so any signed-in device may read/write it.
+      allow read, write: if isSignedIn();
+    }
+
+    match /queuePositionCounters/{counterId} {
+      // Same pattern as tokenCounters, read+bumped inside the check-in transaction.
+      allow read, write: if isSignedIn();
     }
 
     match /bookings/{bookingId} {
-      allow read: if isAdmin()
-        || (isSignedIn() && request.auth.uid == resource.data.farmerId)
-        || isOperatorForCentre(resource.data.centreId);
+      // Relaxed to isSignedIn() for read — see the get()-in-list-queries note above.
+      // getActiveBookingForFarmer() and the operator's findCheckInCandidate() both query this
+      // collection (by farmerId and by centreId+tokenNumber respectively).
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && request.auth.uid == request.resource.data.farmerId;
       allow update: if isAdmin() || isOperatorForCentre(resource.data.centreId);
     }
 
     match /queue/{queueId} {
-      allow read: if isAdmin() || isOperatorForCentre(resource.data.centreId)
-        || ownsBooking(resource.data.bookingId);
-      allow write: if isAdmin() || isOperatorForCentre(resource.data.centreId)
-        || isOperatorForCentre(request.resource.data.centreId);
+      // Relaxed to isSignedIn() for read — see the get()-in-list-queries note above.
+      // listenQueueForCentre() queries this collection by centreId for the Live Queue screen.
+      allow read: if isSignedIn();
+      allow create: if isAdmin() || isOperatorForCentre(request.resource.data.centreId);
+      allow update: if isAdmin() || isOperatorForCentre(resource.data.centreId);
     }
 
     match /procurement/{procurementId} {
@@ -110,11 +148,27 @@ service cloud.firestore {
 
     match /notifications/{notificationId} {
       allow read: if isAdmin() || isOwner(resource.data.farmerId);
-      allow write: if isAdmin();
+      allow create: if isAdmin() || isSignedIn(); // operators create these (e.g. "Call Next")
+      allow update, delete: if isAdmin();
     }
 
     match /staff/{staffId} {
-      allow read, write: if isAdmin();
+      // Read is open to any signed-in device so the login screen and staffSessions checks
+      // above can look a staff record up by id; only an admin can create/edit staff accounts.
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /staffSessions/{uid} {
+      function claimedMatchesRealStaff() {
+        let staff = get(/databases/$(database)/documents/staff/$(request.resource.data.staffId)).data;
+        return staff.role == request.resource.data.role
+          && staff.assignedCentreId == request.resource.data.assignedCentreId;
+      }
+
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn() && request.auth.uid == uid && claimedMatchesRealStaff();
+      allow delete: if isSignedIn() && request.auth.uid == uid; // logout
     }
   }
 }

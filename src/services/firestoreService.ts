@@ -1,6 +1,7 @@
 /**
- * Firestore access for the Farmer App registration -> token flow.
- * Collections/fields follow docs/KisanQ_Master_Technical_Spec.md section 3.
+ * Firestore access for the Farmer App registration -> token flow and the Operator
+ * scan/check-in + live-queue flow. Collections/fields follow
+ * docs/KisanQ_Master_Technical_Spec.md section 3.
  */
 import {
   addDoc,
@@ -9,21 +10,25 @@ import {
   getDoc,
   getDocs,
   limit,
+  onSnapshot,
   orderBy,
   query,
   runTransaction,
   serverTimestamp,
   setDoc,
   where,
+  type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { COLLECTIONS } from "../types/firestore";
 import type {
+  AppNotification,
   Booking,
   Centre,
   Crop,
   Farmer,
   IdentityVerification,
+  QueueEntry,
   Slot,
 } from "../types/firestore";
 
@@ -122,6 +127,11 @@ export async function getBooking(bookingId: string): Promise<BookingWithId | nul
   return snap.exists() ? { id: snap.id, ...(snap.data() as Booking) } : null;
 }
 
+export async function getCrop(cropId: string): Promise<CropWithId | null> {
+  const snap = await getDoc(doc(db, COLLECTIONS.crops, cropId));
+  return snap.exists() ? { id: snap.id, ...(snap.data() as Crop) } : null;
+}
+
 export async function listActiveCentres(): Promise<CentreWithId[]> {
   const q = query(collection(db, COLLECTIONS.centres), where("status", "==", "active"));
   const snap = await getDocs(q);
@@ -168,6 +178,7 @@ export interface CreateBookingInput {
   farmerId: string;
   centreId: string;
   slotId: string;
+  cropId: string;
 }
 
 export interface CreateBookingResult {
@@ -215,6 +226,7 @@ export async function createBooking(
       farmerId: input.farmerId,
       centreId: input.centreId,
       slotId: input.slotId,
+      cropId: input.cropId,
       tokenNumber: token,
       status: "booked",
     };
@@ -244,4 +256,147 @@ export async function getActiveBookingForFarmer(
   if (snap.empty) return null;
   const d = snap.docs[0];
   return { id: d.id, ...(d.data() as Booking) };
+}
+
+// ---------------------------------------------------------------------------
+// Operator: scan/check-in + live queue management (Master Spec build order step 3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Looks up a booking by its token (QR scan or manual entry), only if it hasn't been checked in
+ * yet. Scoped to the operator's own centre AND "booked" status — Firestore rules can only
+ * secure a *query* (as opposed to a single-doc get) when every field the rule checks is also
+ * an equality filter in the query itself, so `centreId` has to be here even though
+ * `isOperatorForCentre` would also pass a per-document check. Doesn't scope by date — tokens
+ * reset daily per centre, so a stale token from a previous day that was never checked in could
+ * theoretically still match; low-risk for a prototype that gets reseeded per demo, but a real
+ * deployment would also filter by the booking's slot date.
+ */
+export async function findCheckInCandidate(
+  tokenNumber: string,
+  centreId: string
+): Promise<BookingWithId | null> {
+  const q = query(
+    collection(db, COLLECTIONS.bookings),
+    where("centreId", "==", centreId),
+    where("tokenNumber", "==", tokenNumber.trim().toUpperCase()),
+    where("status", "==", "booked"),
+    limit(1)
+  );
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  const d = snap.docs[0];
+  return { id: d.id, ...(d.data() as Booking) };
+}
+
+export interface CheckInResult {
+  queueId: string;
+  position: number;
+}
+
+/**
+ * Atomically: allocates the next daily queue position for the centre, creates the queue/{id}
+ * doc (status "waiting"), and moves the booking to status "arrived" — UI/UX spec Operator
+ * screen 2. This is the moment that starts populating the farmer's Live Queue (wired to
+ * real-time listeners in build order step 4).
+ */
+export async function checkInBooking(input: {
+  bookingId: string;
+  staffId: string;
+}): Promise<CheckInResult> {
+  const today = new Date().toISOString().slice(0, 10);
+  const bookingRef = doc(db, COLLECTIONS.bookings, input.bookingId);
+  const queueRef = doc(collection(db, COLLECTIONS.queue));
+
+  return runTransaction(db, async (tx) => {
+    const bookingSnap = await tx.get(bookingRef);
+    if (!bookingSnap.exists()) throw new Error("Booking not found");
+    const booking = bookingSnap.data() as Booking;
+    if (booking.status !== "booked") {
+      throw new Error("This token has already been checked in.");
+    }
+
+    const counterRef = doc(
+      db,
+      COLLECTIONS.queuePositionCounters,
+      `${booking.centreId}_${today}`
+    );
+    const counterSnap = await tx.get(counterRef);
+    const nextPosition = (counterSnap.exists() ? (counterSnap.data().count as number) : 0) + 1;
+
+    tx.set(counterRef, { count: nextPosition });
+    tx.update(bookingRef, { status: "arrived", checkedInByStaffId: input.staffId });
+
+    const queueEntry: QueueEntry = {
+      bookingId: input.bookingId,
+      centreId: booking.centreId,
+      position: nextPosition,
+      status: "waiting",
+      estimatedWaitMinutes: (nextPosition - 1) * AVERAGE_PROCESSING_MINUTES,
+    };
+    tx.set(queueRef, queueEntry);
+
+    return { queueId: queueRef.id, position: nextPosition };
+  });
+}
+
+export interface QueueEntryWithId extends QueueEntry {
+  id: string;
+}
+
+/**
+ * Real-time listener for a centre's queue — UI/UX spec Operator screen 3 ("this screen powers
+ * the farmer's Live Queue screen — most important operator screen"). Returns an unsubscribe
+ * function; callers own the listener's lifecycle.
+ */
+export function listenQueueForCentre(
+  centreId: string,
+  onChange: (entries: QueueEntryWithId[]) => void,
+  onError?: (error: Error) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, COLLECTIONS.queue),
+    where("centreId", "==", centreId),
+    orderBy("position", "asc")
+  );
+  return onSnapshot(
+    q,
+    (snap) => onChange(snap.docs.map((d) => ({ id: d.id, ...(d.data() as QueueEntry) }))),
+    (err) => onError?.(err)
+  );
+}
+
+/**
+ * "Call Next" — Operator screen 3: moves a waiting queue entry (and its booking) to
+ * "processing", and notifies the farmer with the exact copy from Missing Details Polish sec. 1.
+ * The doc's "[X]" counter placeholder is fixed to "1" here since the data model doesn't track
+ * physical counter numbers — a real deployment would let an operator pick/enter their counter.
+ */
+export async function callNextInQueue(queueId: string): Promise<void> {
+  const queueRef = doc(db, COLLECTIONS.queue, queueId);
+  const notificationRef = doc(collection(db, COLLECTIONS.notifications));
+
+  await runTransaction(db, async (tx) => {
+    const queueSnap = await tx.get(queueRef);
+    if (!queueSnap.exists()) throw new Error("Queue entry not found");
+    const queueEntry = queueSnap.data() as QueueEntry;
+
+    const bookingRef = doc(db, COLLECTIONS.bookings, queueEntry.bookingId);
+    const bookingSnap = await tx.get(bookingRef);
+    if (!bookingSnap.exists()) throw new Error("Booking not found");
+    const booking = bookingSnap.data() as Booking;
+
+    tx.update(queueRef, { status: "processing" });
+    tx.update(bookingRef, { status: "processing" });
+
+    const notification: AppNotification = {
+      farmerId: booking.farmerId,
+      type: "call_next",
+      message: "काउंटर 1 पर पहुंचें — आपकी बारी आ गई है।",
+      channel: "in_app",
+      status: "unread",
+      createdAt: serverTimestamp() as unknown as AppNotification["createdAt"],
+    };
+    tx.set(notificationRef, notification);
+  });
 }

@@ -1,14 +1,16 @@
 import React from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Platform, StyleSheet, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { LanguageProvider } from "./src/context/LanguageContext";
 import { FarmerProvider, useFarmer } from "./src/context/FarmerContext";
+import { OperatorProvider } from "./src/context/OperatorContext";
 import { AppNavigator } from "./src/navigation/AppNavigator";
+import { OperatorNavigator } from "./src/navigation/OperatorNavigator";
 import { colors } from "./src/theme";
 
-function Root() {
+function FarmerRoot() {
   const { initializing, farmer } = useFarmer();
 
   if (initializing) {
@@ -24,16 +26,25 @@ function Root() {
   return <AppNavigator initialRouteName={farmer ? "Home" : "Splash"} />;
 }
 
+// Master Spec sec. 2: "Operator & Admin: Same Expo codebase, run as a web build" — running as
+// web is exactly the signal used here to pick the Operator/Admin surface instead of the
+// Farmer App, rather than adding a separate mode-switcher screen the docs never mention.
 export default function App() {
   return (
     <SafeAreaProvider>
-      <LanguageProvider>
-        <FarmerProvider>
-          <NavigationContainer>
-            <Root />
-          </NavigationContainer>
-        </FarmerProvider>
-      </LanguageProvider>
+      <NavigationContainer>
+        {Platform.OS === "web" ? (
+          <OperatorProvider>
+            <OperatorNavigator />
+          </OperatorProvider>
+        ) : (
+          <LanguageProvider>
+            <FarmerProvider>
+              <FarmerRoot />
+            </FarmerProvider>
+          </LanguageProvider>
+        )}
+      </NavigationContainer>
       <StatusBar style="dark" />
     </SafeAreaProvider>
   );

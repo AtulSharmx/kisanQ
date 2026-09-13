@@ -9,7 +9,7 @@ export type RootStackParamList = {
   Home: undefined;
   AddCrop: undefined;
   CentreSelection: { cropType: string; expectedQuantity: number };
-  SlotBooking: { centreId: string; cropType: string; expectedQuantity: number };
+  SlotBooking: { centreId: string; cropId: string };
   Token: { bookingId: string };
   ComingSoon: { titleKey: "homeLiveQueue" | "homeMyProduce" | "homeProcurementStatus" | "homePayment" | "homeNotifications" };
 };

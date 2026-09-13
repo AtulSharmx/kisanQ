@@ -7,6 +7,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import { useFarmer } from "../../context/FarmerContext";
 import { ScreenContainer } from "../../components/ScreenContainer";
 import {
+  addCrop,
   getCentreEstimatedWaitMinutes,
   hasAvailableSlotToday,
   listActiveCentres,
@@ -29,6 +30,25 @@ export function CentreSelectionScreen({ route, navigation }: Props) {
   const { t } = useLanguage();
   const { farmerId } = useFarmer();
   const [ranked, setRanked] = useState<Ranked[] | null>(null);
+  const [booking, setBooking] = useState(false);
+
+  const onSelectCentre = async (centreId: string) => {
+    if (!farmerId || booking) return;
+    setBooking(true);
+    try {
+      // The crop doc is created here, not on the previous screen, since its
+      // preferredCentreId field needs the centre the farmer is about to pick.
+      const cropId = await addCrop({
+        farmerId,
+        cropType,
+        expectedQuantity,
+        preferredCentreId: centreId,
+      });
+      navigation.navigate("SlotBooking", { centreId, cropId });
+    } finally {
+      setBooking(false);
+    }
+  };
 
   useEffect(() => {
     if (!farmerId) return;
@@ -63,13 +83,8 @@ export function CentreSelectionScreen({ route, navigation }: Props) {
         renderItem={({ item, index }) => (
           <Pressable
             style={styles.card}
-            onPress={() =>
-              navigation.navigate("SlotBooking", {
-                centreId: item.centre.id,
-                cropType,
-                expectedQuantity,
-              })
-            }
+            disabled={booking}
+            onPress={() => onSelectCentre(item.centre.id)}
           >
             {index === 0 && (
               <View style={styles.starBadge}>

@@ -62,14 +62,20 @@ collection, and [`docs/KisanQ_Master_Technical_Spec.md`](docs/KisanQ_Master_Tech
 for the canonical spec:
 
 `farmers`, `identityVerification`, `crops`, `centres`, `slots`, `bookings`, `queue`,
-`procurement`, `payments`, `notifications`, `staff`, `tokenCounters` (internal, not in the
-Master Spec — see the comment in `src/types/firestore.ts`).
+`procurement`, `payments`, `notifications`, `staff`, `staffSessions`, `tokenCounters`,
+`queuePositionCounters` (the last four are internal, not in the Master Spec — see the comments
+in `src/types/firestore.ts`).
 
-## Farmer App — what's built so far
+## What's built so far
 
-Registration through token generation (Master Spec build order step 2) is implemented end to
-end: Splash/Language → Aadhaar+OTP (mocked) → Profile Confirm → Village/Crop/Preferred Centre
-→ Home Dashboard → Add Crop → Centre Selection (ranked by estimated wait) → Slot Booking →
-Token screen with QR + share. Live Queue, Procurement Status, and Payment show their documented
-empty states (Missing Details Polish sec. 2) since the operator side that populates them
-(build order step 3+) isn't built yet.
+**Farmer App** (build order step 2 — registration through token generation), on native/Expo Go:
+Splash/Language → Aadhaar+OTP (mocked) → Profile Confirm → Village/Crop/Preferred Centre →
+Home Dashboard → Add Crop → Centre Selection (ranked by estimated wait) → Slot Booking → Token
+screen with QR + share. Live Queue, Procurement Status, and Payment show their documented empty
+states (Missing Details Polish sec. 2) until real-time listeners are wired up (step 4).
+
+**Operator** (build order step 3 — scan/check-in + live queue), on the web build: Staff Login
+(ID + PIN — demo: `staff-op-1` / `1234`) → Scan/Check-in (camera QR + always-visible manual
+token entry, per Missing Details Polish sec. 3) → Live Queue Management (Waiting/Processing/
+Completed tabs, real-time via `onSnapshot`, "Call Next" pushes a notification to the farmer).
+Checking a farmer in is what actually starts populating their Live Queue position.

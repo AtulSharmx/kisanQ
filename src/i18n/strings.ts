@@ -79,6 +79,23 @@ export const strings = {
   emptyLiveQueue: { hi: "आपकी कोई बुकिंग नहीं है", en: "You have no active booking" },
   emptyPayment: { hi: "अभी कोई भुगतान नहीं", en: "No payment yet" },
 
+  liveQueuePeopleAhead: { hi: "आपसे पहले {n} लोग", en: "{n} people ahead of you" },
+  liveQueueEstWait: { hi: "अनुमानित प्रतीक्षा", en: "Estimated wait" },
+  liveQueueAwaitingCheckin: {
+    hi: "चेक-इन का इंतज़ार है — केंद्र पर पहुंचकर QR स्कैन करवाएं",
+    en: "Waiting for check-in — scan your QR at the centre",
+  },
+  liveQueueYourTurn: { hi: "आपकी बारी आ गई है — काउंटर पर पहुंचें", en: "It's your turn — please go to the counter" },
+  liveQueueDone: { hi: "प्रक्रिया पूरी हुई", en: "Processing complete" },
+
+  procStepBooked: { hi: "स्लॉट बुक हुआ", en: "Slot booked" },
+  procStepArrived: { hi: "पहुंच गए", en: "Arrived" },
+  procStepWeighed: { hi: "तौल हुई", en: "Weighed" },
+  procStepQualityChecked: { hi: "जांच हुई", en: "Quality checked" },
+  procStepAccepted: { hi: "स्वीकार हुआ", en: "Accepted" },
+  procStepPayment: { hi: "भुगतान", en: "Payment" },
+  procRejected: { hi: "अस्वीकार किया गया", en: "Rejected" },
+
   addCropTitle: { hi: "फसल जोड़ें", en: "Add crop / produce" },
   checkSlotsBtn: { hi: "उपलब्ध स्लॉट देखें", en: "Check Available Slots" },
 

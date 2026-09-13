@@ -11,5 +11,7 @@ export type RootStackParamList = {
   CentreSelection: { cropType: string; expectedQuantity: number };
   SlotBooking: { centreId: string; cropId: string };
   Token: { bookingId: string };
-  ComingSoon: { titleKey: "homeLiveQueue" | "homeMyProduce" | "homeProcurementStatus" | "homePayment" | "homeNotifications" };
+  LiveQueue: undefined;
+  ProcurementStatus: undefined;
+  ComingSoon: { titleKey: "homeMyProduce" | "homePayment" | "homeNotifications" };
 };

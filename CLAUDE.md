@@ -122,13 +122,22 @@ plugins, etc.) rather than relying on older training knowledge.
 - **Hard-won Firestore limitation, worth knowing before writing more queries:** security rules
   that call `get()`/`exists()` (the only way to check a role without a real custom claim) do
   **not** work to secure *list/collection queries* — only single-document `get()`/write
-  requests. `bookings`, `crops`, and `queue` therefore have their **read** rule relaxed to
-  `isSignedIn()` (writes stay properly scoped via `get()`-based checks, since writes are always
-  single-document). This is a real, documented gap for the prototype — the correct fix is a
-  Cloud Function that mints real custom claims on staff login, which needs the Blaze plan and
-  is out of scope here. Don't "fix" this by adding a `get()`-based OR-branch to one of those
-  read rules — it will silently break every list query on that collection again.
+  requests. `bookings`, `crops`, `queue`, and `procurement` therefore have their **read** rule
+  relaxed to `isSignedIn()` (writes stay properly scoped via `get()`-based checks, since writes
+  are always single-document). This is a real, documented gap for the prototype — the correct
+  fix is a Cloud Function that mints real custom claims on staff login, which needs the Blaze
+  plan and is out of scope here. Don't "fix" this by adding a `get()`-based OR-branch to one of
+  those read rules — it will silently break every list query on that collection again.
 - PIN hashing ([`src/services/pinAuth.ts`](src/services/pinAuth.ts)) is plain SHA-256, no salt —
   `scripts/seed.ts` hashes the demo PINs the same way (Node's `crypto.createHash`) so seeded
   accounts can log in. Demo credentials: `staff-op-1` / PIN `1234` (operator), `staff-admin-1` /
   PIN `9999` (admin, not yet used by any screen).
+- **Farmer Live Queue / Procurement Status** ([`src/screens/farmer/LiveQueueScreen.tsx`](src/screens/farmer/LiveQueueScreen.tsx),
+  [`ProcurementStatusScreen.tsx`](src/screens/farmer/ProcurementStatusScreen.tsx)) listen live
+  via `listenQueueForCentre`/`listenBooking`/`listenProcurementForBooking` in
+  `firestoreService.ts` — no polling. "People ahead of you" is a *live* count derived from the
+  centre's whole queue (entries with `status != 'completed'` and a lower `position`), not the
+  `estimatedWaitMinutes` field frozen at check-in — that's what makes it visibly react the
+  instant an operator calls the next farmer. When build order step 5 adds the weighing/quality
+  screens and starts writing `procurement/{id}` docs, the Procurement Status ticks pick that up
+  automatically — no farmer-side change should be needed for that.

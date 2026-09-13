@@ -7,20 +7,16 @@ import { useLanguage } from "../../context/LanguageContext";
 import { useFarmer } from "../../context/FarmerContext";
 import { ScreenContainer } from "../../components/ScreenContainer";
 import { PrimaryButton } from "../../components/PrimaryButton";
-import {
-  getActiveBookingForFarmer,
-  listCropsForFarmer,
-  type BookingWithId,
-  type CropWithId,
-} from "../../services/firestoreService";
+import { listCropsForFarmer, type CropWithId } from "../../services/firestoreService";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ComingSoon">;
 
 /**
- * Screens that live past the registration -> token flow (build order step 3+: operator
- * check-in/live-queue, weighing, quality-check, payments). Those aren't built yet, so this
- * shows each one's documented empty state (Missing Details Polish sec. 2) honestly rather than
- * faking data — except My Produce, which already has real crop data from registration.
+ * The few remaining Home tiles with no dedicated screen yet: Payment (build order step 5,
+ * needs the operator's weighing/quality/payment flow first) and Notifications (needs FCM/
+ * real notification delivery, also not built). Shows each one's documented empty state
+ * (Missing Details Polish sec. 2) honestly rather than faking data — except My Produce, which
+ * already has real crop data from registration.
  */
 export function ComingSoonScreen({ route, navigation }: Props) {
   const { titleKey } = route.params;
@@ -28,19 +24,12 @@ export function ComingSoonScreen({ route, navigation }: Props) {
   const { farmerId } = useFarmer();
   const [loading, setLoading] = useState(true);
   const [crops, setCrops] = useState<CropWithId[]>([]);
-  const [booking, setBooking] = useState<BookingWithId | null>(null);
 
   useEffect(() => {
     if (!farmerId) return;
     setLoading(true);
-    Promise.all([
-      titleKey === "homeMyProduce" ? listCropsForFarmer(farmerId) : Promise.resolve([]),
-      getActiveBookingForFarmer(farmerId),
-    ])
-      .then(([cropList, activeBooking]) => {
-        setCrops(cropList);
-        setBooking(activeBooking);
-      })
+    (titleKey === "homeMyProduce" ? listCropsForFarmer(farmerId) : Promise.resolve([]))
+      .then(setCrops)
       .finally(() => setLoading(false));
   }, [farmerId, titleKey]);
 
@@ -69,22 +58,6 @@ export function ComingSoonScreen({ route, navigation }: Props) {
     );
   }
 
-  if (
-    (titleKey === "homeLiveQueue" || titleKey === "homeProcurementStatus") &&
-    booking
-  ) {
-    return (
-      <ScreenContainer>
-        <Text style={styles.icon}>⏳</Text>
-        <Text style={styles.title}>{booking.tokenNumber}</Text>
-        <Text style={styles.body}>
-          चेक-इन का इंतज़ार है — केंद्र पर पहुंचकर QR स्कैन करवाएं। (Waiting for check-in — scan
-          your QR at the centre to see live status.)
-        </Text>
-      </ScreenContainer>
-    );
-  }
-
   const empty = emptyStateFor(titleKey);
   return (
     <ScreenContainer>
@@ -108,13 +81,6 @@ function emptyStateFor(titleKey: Props["route"]["params"]["titleKey"]) {
       return {
         icon: "🌾",
         textKey: "emptyMyProduce" as const,
-        cta: { labelKey: "homeBookSlot" as const, screen: "AddCrop" },
-      };
-    case "homeLiveQueue":
-    case "homeProcurementStatus":
-      return {
-        icon: "⏳",
-        textKey: "emptyLiveQueue" as const,
         cta: { labelKey: "homeBookSlot" as const, screen: "AddCrop" },
       };
     case "homePayment":

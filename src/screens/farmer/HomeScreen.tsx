@@ -25,7 +25,7 @@ export function HomeScreen({ navigation }: Props) {
     if (booking) {
       navigation.navigate("Token", { bookingId: booking.id });
     } else {
-      navigation.navigate("ComingSoon", { titleKey: "homeLiveQueue" });
+      navigation.navigate("LiveQueue");
     }
   };
 
@@ -45,7 +45,7 @@ export function HomeScreen({ navigation }: Props) {
         <IconTile
           icon="⏳"
           label={t("homeLiveQueue")}
-          onPress={() => navigation.navigate("ComingSoon", { titleKey: "homeLiveQueue" })}
+          onPress={() => navigation.navigate("LiveQueue")}
         />
         <IconTile
           icon="🌾"
@@ -55,7 +55,7 @@ export function HomeScreen({ navigation }: Props) {
         <IconTile
           icon="📋"
           label={t("homeProcurementStatus")}
-          onPress={() => navigation.navigate("ComingSoon", { titleKey: "homeProcurementStatus" })}
+          onPress={() => navigation.navigate("ProcurementStatus")}
         />
         <IconTile
           icon="💰"

@@ -1,7 +1,7 @@
 /**
- * Firestore access for the Farmer App registration -> token flow and the Operator
- * scan/check-in + live-queue flow. Collections/fields follow
- * docs/KisanQ_Master_Technical_Spec.md section 3.
+ * Firestore access for the Farmer App registration -> token flow, the Operator
+ * scan/check-in + live-queue flow, and the Farmer App's real-time Live Queue / Procurement
+ * Status screens. Collections/fields follow docs/KisanQ_Master_Technical_Spec.md section 3.
  */
 import {
   addDoc,
@@ -28,12 +28,13 @@ import type {
   Crop,
   Farmer,
   IdentityVerification,
+  Procurement,
   QueueEntry,
   Slot,
 } from "../types/firestore";
 
 /** Average processing time per farmer, for wait estimates — see Missing Details Polish sec. 6. */
-const AVERAGE_PROCESSING_MINUTES = 8;
+export const AVERAGE_PROCESSING_MINUTES = 8;
 
 export interface RegisterFarmerInput {
   farmerId: string; // the signed-in Firebase Auth uid — see src/lib/firebase.ts
@@ -399,4 +400,51 @@ export async function callNextInQueue(queueId: string): Promise<void> {
     };
     tx.set(notificationRef, notification);
   });
+}
+
+// ---------------------------------------------------------------------------
+// Farmer: Live Queue + Procurement Status, wired to real-time listeners
+// (Master Spec build order step 4)
+// ---------------------------------------------------------------------------
+
+/** Real-time listener on a single booking — Procurement Status screen's "booked"/"arrived" ticks. */
+export function listenBooking(
+  bookingId: string,
+  onChange: (booking: BookingWithId | null) => void,
+  onError?: (error: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    doc(db, COLLECTIONS.bookings, bookingId),
+    (snap) => onChange(snap.exists() ? { id: snap.id, ...(snap.data() as Booking) } : null),
+    (err) => onError?.(err)
+  );
+}
+
+export interface ProcurementWithId extends Procurement {
+  id: string;
+}
+
+/**
+ * Real-time listener for the procurement doc tied to a booking (0 docs until the operator's
+ * weighing screen creates one — build order step 5, not built yet). At most one procurement
+ * doc per booking in practice, so this reports the first match or null.
+ */
+export function listenProcurementForBooking(
+  bookingId: string,
+  onChange: (procurement: ProcurementWithId | null) => void,
+  onError?: (error: Error) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, COLLECTIONS.procurement),
+    where("bookingId", "==", bookingId),
+    limit(1)
+  );
+  return onSnapshot(
+    q,
+    (snap) =>
+      onChange(
+        snap.empty ? null : { id: snap.docs[0].id, ...(snap.docs[0].data() as Procurement) }
+      ),
+    (err) => onError?.(err)
+  );
 }

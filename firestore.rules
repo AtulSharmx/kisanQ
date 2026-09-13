@@ -31,8 +31,9 @@ rules_version = '2';
 // collection that the app needs to *query* — not just fetch single documents from — has its
 // read rule relaxed to "any signed-in device" below, with a comment at each spot. Writes and
 // single-document reads keep the real get()-based role checks; only list-query reads on
-// bookings/, crops/, and queue/ are affected. This is a real, deliberate gap for the prototype,
-// not an oversight — the honest fix is a Cloud Function minting real custom claims.
+// bookings/, crops/, queue/, and procurement/ are affected. This is a real, deliberate gap for
+// the prototype, not an oversight — the honest fix is a Cloud Function minting real custom
+// claims.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -136,7 +137,10 @@ service cloud.firestore {
     }
 
     match /procurement/{procurementId} {
-      allow read: if isAdmin() || ownsBooking(resource.data.bookingId);
+      // Relaxed to isSignedIn() for read — see the get()-in-list-queries note above.
+      // The farmer's Procurement Status screen queries this collection by bookingId in real
+      // time (onSnapshot).
+      allow read: if isSignedIn();
       allow write: if isAdmin(); // narrowed to assigned-centre operators once procurement
                                   // docs carry a centreId field
     }

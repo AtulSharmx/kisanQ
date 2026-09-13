@@ -13,6 +13,8 @@ import { AddCropScreen } from "../screens/farmer/AddCropScreen";
 import { CentreSelectionScreen } from "../screens/farmer/CentreSelectionScreen";
 import { SlotBookingScreen } from "../screens/farmer/SlotBookingScreen";
 import { TokenScreen } from "../screens/farmer/TokenScreen";
+import { LiveQueueScreen } from "../screens/farmer/LiveQueueScreen";
+import { ProcurementStatusScreen } from "../screens/farmer/ProcurementStatusScreen";
 import { ComingSoonScreen } from "../screens/farmer/ComingSoonScreen";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -32,6 +34,8 @@ export function AppNavigator({ initialRouteName }: { initialRouteName: "Splash" 
       <Stack.Screen name="CentreSelection" component={CentreSelectionScreen} />
       <Stack.Screen name="SlotBooking" component={SlotBookingScreen} />
       <Stack.Screen name="Token" component={TokenScreen} />
+      <Stack.Screen name="LiveQueue" component={LiveQueueScreen} />
+      <Stack.Screen name="ProcurementStatus" component={ProcurementStatusScreen} />
       <Stack.Screen name="ComingSoon" component={ComingSoonScreen} />
     </Stack.Navigator>
   );

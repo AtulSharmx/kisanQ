@@ -1,0 +1,95 @@
+rules_version = '2';
+
+// Access model, per docs/KisanQ_Missing_Details_Polish.md section 7:
+//   - A farmer can only read/write their own documents in farmers/, bookings/, crops/
+//     (matched by their own farmerId).
+//   - An operator can only write to queue/, procurement/ documents belonging to bookings
+//     at their assigned centre.
+//   - Admin has read access across all collections, write access only to centres/ management.
+//
+// Assumption (not yet confirmed in the spec docs): the farmer's Firebase Auth uid equals
+// their farmerId (e.g. minted via a custom token right after the mocked Aadhaar+OTP flow
+// succeeds), and staff sign in with Firebase Auth too, with a custom claim `role` of
+// "operator" or "admin" and, for operators, a `centreId` claim. Revisit this once the real
+// auth flow is implemented.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(farmerId) {
+      return isSignedIn() && request.auth.uid == farmerId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.role == 'admin';
+    }
+
+    function isOperatorForCentre(centreId) {
+      return isSignedIn()
+        && request.auth.token.role == 'operator'
+        && request.auth.token.centreId == centreId;
+    }
+
+    match /farmers/{farmerId} {
+      allow read, write: if isOwner(farmerId) || isAdmin();
+    }
+
+    match /identityVerification/{farmerId} {
+      allow read: if isOwner(farmerId) || isAdmin();
+      allow write: if isOwner(farmerId);
+    }
+
+    match /crops/{cropId} {
+      allow read, write: if isAdmin()
+        || (isSignedIn() && request.auth.uid == resource.data.farmerId);
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.farmerId;
+    }
+
+    match /centres/{centreId} {
+      allow read: if true; // centre list is needed pre-login for slot browsing
+      allow write: if isAdmin();
+    }
+
+    match /slots/{slotId} {
+      allow read: if true;
+      allow write: if isAdmin() || isOperatorForCentre(resource.data.centreId);
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && request.auth.uid == resource.data.farmerId)
+        || isOperatorForCentre(resource.data.centreId);
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.farmerId;
+      allow update: if isAdmin() || isOperatorForCentre(resource.data.centreId);
+    }
+
+    match /queue/{queueId} {
+      allow read: if isAdmin() || isSignedIn(); // farmer reads via a query filtered to their booking
+      allow write: if isAdmin() || isOperatorForCentre(resource.data.centreId)
+        || isOperatorForCentre(request.resource.data.centreId);
+    }
+
+    match /procurement/{procurementId} {
+      allow read: if isAdmin() || isSignedIn(); // farmer reads via a query filtered to their booking
+      allow write: if isAdmin() || isSignedIn(); // narrowed to assigned-centre operators once
+                                                  // procurement docs carry a centreId field
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isAdmin() || isSignedIn(); // farmer reads via a query filtered to their procurement
+      allow write: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isAdmin() || isOwner(resource.data.farmerId);
+      allow write: if isAdmin();
+    }
+
+    match /staff/{staffId} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

@@ -26,14 +26,14 @@ rules_version = '2';
 // Second, separate limitation, confirmed empirically while wiring the Operator screens:
 // Cloud Firestore CANNOT secure a *list/collection query* with a rule that depends on a get()
 // call — get()-based checks only work for single-document get()/write requests. Since
-// isOperatorForCentre()/isAdmin()/ownsBooking() all call get() (there's no other way to look up
+// isOperatorForCentre()/isAdmin()/isOperatorForBooking() all call get() (there's no other way to look up
 // a role without a real custom claim, which again needs a Cloud Function we don't have), any
 // collection that the app needs to *query* — not just fetch single documents from — has its
 // read rule relaxed to "any signed-in device" below, with a comment at each spot. Writes and
 // single-document reads keep the real get()-based role checks; only list-query reads on
-// bookings/, crops/, queue/, and procurement/ are affected. This is a real, deliberate gap for
-// the prototype, not an oversight — the honest fix is a Cloud Function minting real custom
-// claims.
+// bookings/, crops/, queue/, procurement/, and payments/ are affected. This is a real,
+// deliberate gap for the prototype, not an oversight — the honest fix is a Cloud Function
+// minting real custom claims.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -61,17 +61,12 @@ service cloud.firestore {
       return isSignedIn() && (mySession().role == 'operator' || mySession().role == 'admin');
     }
 
-    function bookingFarmerId(bookingId) {
-      return get(/databases/$(database)/documents/bookings/$(bookingId)).data.farmerId;
+    function bookingCentreId(bookingId) {
+      return get(/databases/$(database)/documents/bookings/$(bookingId)).data.centreId;
     }
 
-    function ownsBooking(bookingId) {
-      return isSignedIn() && request.auth.uid == bookingFarmerId(bookingId);
-    }
-
-    function ownsProcurement(procurementId) {
-      let bookingId = get(/databases/$(database)/documents/procurement/$(procurementId)).data.bookingId;
-      return ownsBooking(bookingId);
+    function isOperatorForBooking(bookingId) {
+      return isOperatorForCentre(bookingCentreId(bookingId));
     }
 
     match /farmers/{farmerId} {
@@ -103,7 +98,14 @@ service cloud.firestore {
 
     match /slots/{slotId} {
       allow read: if true;
-      allow write: if isAdmin() || isOperatorForCentre(resource.data.centreId);
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || isOperatorForCentre(resource.data.centreId)
+        // A farmer booking a slot bumps its bookedCount by exactly 1 (createBooking()'s
+        // transaction) — this is the only slot write a farmer ever needs to make.
+        || (isSignedIn()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["bookedCount"])
+            && request.resource.data.bookedCount == resource.data.bookedCount + 1);
     }
 
     match /tokenCounters/{counterId} {
@@ -141,12 +143,19 @@ service cloud.firestore {
       // The farmer's Procurement Status screen queries this collection by bookingId in real
       // time (onSnapshot).
       allow read: if isSignedIn();
-      allow write: if isAdmin(); // narrowed to assigned-centre operators once procurement
-                                  // docs carry a centreId field
+      // Weighing/Quality-check screens (build order step 5): scoped via the booking's own
+      // centreId rather than a centreId field on the procurement doc itself, since the doc
+      // doesn't carry one.
+      allow create: if isAdmin() || isOperatorForBooking(request.resource.data.bookingId);
+      allow update: if isAdmin() || isOperatorForBooking(resource.data.bookingId);
     }
 
     match /payments/{paymentId} {
-      allow read: if isAdmin() || ownsProcurement(resource.data.procurementId);
+      // Relaxed to isSignedIn() for read — see the get()-in-list-queries note above. The
+      // farmer's Procurement Status screen queries this collection by procurementId in real
+      // time (onSnapshot) for the "Payment" tick — nothing writes here yet (payment
+      // simulation isn't part of the build order steps done so far).
+      allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 

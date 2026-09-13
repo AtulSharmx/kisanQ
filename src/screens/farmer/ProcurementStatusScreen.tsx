@@ -10,8 +10,10 @@ import { PrimaryButton } from "../../components/PrimaryButton";
 import {
   getActiveBookingForFarmer,
   listenBooking,
+  listenPaymentForProcurement,
   listenProcurementForBooking,
   type BookingWithId,
+  type PaymentWithId,
   type ProcurementWithId,
 } from "../../services/firestoreService";
 import type { StringKey } from "../../i18n/strings";
@@ -25,10 +27,12 @@ interface Step {
 
 /**
  * Procurement Status Tracker — UI/UX spec screen 10, wired to real-time listeners (Master Spec
- * build order step 4). This is the anti-corruption differentiator from the Winning Strategy
- * doc: every weighing/quality-check write the operator makes should reach this screen live.
- * Weighing and quality-check screens are build order step 5 and don't exist yet, so this can
- * only show real ticks up through "Arrived" for now — it's already wired for when step 5 lands.
+ * build order step 4/5). This is the anti-corruption differentiator from the Winning Strategy
+ * doc: every weighing/quality-check write the operator makes reaches this screen live.
+ * Payment simulation isn't part of any build order step done so far, so the "Payment" tick
+ * stays honestly unticked until something actually writes to payments/ — it deliberately does
+ * NOT approximate that from booking.status, which now flips to "completed" the moment
+ * quality-check finishes regardless of payment.
  */
 export function ProcurementStatusScreen({ navigation }: Props) {
   const { t } = useLanguage();
@@ -36,23 +40,30 @@ export function ProcurementStatusScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState<BookingWithId | null>(null);
   const [procurement, setProcurement] = useState<ProcurementWithId | null>(null);
+  const [payment, setPayment] = useState<PaymentWithId | null>(null);
 
   useEffect(() => {
     if (!farmerId) return;
     let unsubBooking: (() => void) | undefined;
     let unsubProcurement: (() => void) | undefined;
+    let unsubPayment: (() => void) | undefined;
 
     getActiveBookingForFarmer(farmerId).then((b) => {
       setLoading(false);
       if (!b) return;
       setBooking(b);
       unsubBooking = listenBooking(b.id, setBooking);
-      unsubProcurement = listenProcurementForBooking(b.id, setProcurement);
+      unsubProcurement = listenProcurementForBooking(b.id, (p) => {
+        setProcurement(p);
+        unsubPayment?.();
+        unsubPayment = p ? listenPaymentForProcurement(p.id, setPayment) : undefined;
+      });
     });
 
     return () => {
       unsubBooking?.();
       unsubProcurement?.();
+      unsubPayment?.();
     };
   }, [farmerId]);
 
@@ -94,7 +105,7 @@ export function ProcurementStatusScreen({ navigation }: Props) {
   const weighed = procurement?.actualWeight != null;
   const qualityChecked = !!procurement && procurement.qualityStatus !== "pending";
   const accepted = procurement?.qualityStatus === "accepted";
-  const paid = booking.status === "completed"; // real payment linking lands with build order step 5
+  const paid = payment?.status === "completed";
 
   const steps: Step[] = [
     { key: "procStepBooked", done: true },

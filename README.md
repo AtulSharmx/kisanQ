@@ -72,20 +72,28 @@ in `src/types/firestore.ts`).
 Splash/Language → Aadhaar+OTP (mocked) → Profile Confirm → Village/Crop/Preferred Centre →
 Home Dashboard → Add Crop → Centre Selection (ranked by estimated wait) → Slot Booking → Token
 screen with QR + share. Payment and Notifications still show their documented empty states
-(Missing Details Polish sec. 2) — they need the operator's weighing/quality/payment flow
-(step 5) and FCM delivery, neither of which exist yet.
+(Missing Details Polish sec. 2) — payment simulation isn't part of any build order step done so
+far, and FCM delivery doesn't exist yet.
 
 **Operator** (build order step 3 — scan/check-in + live queue), on the web build: Staff Login
-(ID + PIN — demo: `staff-op-1` / `1234`) → Scan/Check-in (camera QR + always-visible manual
-token entry, per Missing Details Polish sec. 3) → Live Queue Management (Waiting/Processing/
-Completed tabs, real-time via `onSnapshot`, "Call Next" pushes a notification to the farmer).
-Checking a farmer in is what actually starts populating their Live Queue position.
+(ID + PIN — demo: `staff-op-1` Karnal / `staff-op-2` Panipat / `staff-op-3` Sonipat, all PIN
+`1234`) → Scan/Check-in (camera QR + always-visible manual token entry, per Missing Details
+Polish sec. 3) → Live Queue Management (Waiting/Processing/Completed tabs, real-time via
+`onSnapshot`, "Call Next" pushes a notification to the farmer). Checking a farmer in is what
+actually starts populating their Live Queue position.
 
 **Farmer Live Queue + Procurement Status** (build order step 4 — real-time listeners), on
-native/Expo Go: both screens now listen live (`onSnapshot`) instead of showing a static
-placeholder. Live Queue shows "X people ahead of you" computed from the centre's whole queue
-(not the position value frozen at check-in), so it visibly drops the instant an operator
-processes someone ahead. Procurement Status ticks Booked/Arrived live off the booking doc;
-Weighed/Quality-checked/Accepted/Payment are wired to the `procurement` collection and will
-tick automatically once build order step 5 (weighing/quality-check screens) starts writing to
-it — there's nothing further to change on the farmer side for that.
+native/Expo Go: both screens listen live (`onSnapshot`) instead of showing a static placeholder.
+Live Queue shows "X people ahead of you" computed from the centre's whole queue (not the
+position value frozen at check-in), so it visibly drops the instant an operator processes
+someone ahead. Procurement Status ticks Booked/Arrived/Weighed/Quality-checked/Accepted live;
+the Payment tick stays honestly unticked until payment simulation is built (it deliberately
+doesn't fake this from booking.status).
+
+**Operator weighing + quality check** (build order step 5), on the web build: from a
+Processing row in Live Queue Management, "तौल करें (Weigh)" opens the Weighing screen (expected
+vs actual quantity) → Quality Check screen (moisture % stepper, A/B/C grade, Accept/Reject —
+both behind a confirm dialog, per UI/UX spec principle 9). Reject records
+`procurementStatus: "rejected"` with a reason and no payment obligation, per Missing Details
+Polish sec. 8; either outcome closes out the booking and queue entry. Both screens push the
+exact-copy Hindi notifications from Missing Details Polish sec. 1.

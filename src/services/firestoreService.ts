@@ -28,6 +28,7 @@ import type {
   Crop,
   Farmer,
   IdentityVerification,
+  Payment,
   Procurement,
   QueueEntry,
   Slot,
@@ -426,8 +427,8 @@ export interface ProcurementWithId extends Procurement {
 
 /**
  * Real-time listener for the procurement doc tied to a booking (0 docs until the operator's
- * weighing screen creates one — build order step 5, not built yet). At most one procurement
- * doc per booking in practice, so this reports the first match or null.
+ * weighing screen creates one). At most one procurement doc per booking in practice, so this
+ * reports the first match or null.
  */
 export function listenProcurementForBooking(
   bookingId: string,
@@ -447,4 +448,141 @@ export function listenProcurementForBooking(
       ),
     (err) => onError?.(err)
   );
+}
+
+export interface PaymentWithId extends Payment {
+  id: string;
+}
+
+/**
+ * Real-time listener for the payment doc tied to a procurement (0 docs today — nothing writes
+ * to payments/ yet, since payment simulation isn't part of the build order steps done so far).
+ * Used for the Procurement Status tracker's "Payment" tick, so it doesn't fall back to
+ * approximating payment completion from booking.status (which now flips to "completed" the
+ * moment quality-check finishes, whether or not any payment happened).
+ */
+export function listenPaymentForProcurement(
+  procurementId: string,
+  onChange: (payment: PaymentWithId | null) => void,
+  onError?: (error: Error) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, COLLECTIONS.payments),
+    where("procurementId", "==", procurementId),
+    limit(1)
+  );
+  return onSnapshot(
+    q,
+    (snap) =>
+      onChange(snap.empty ? null : { id: snap.docs[0].id, ...(snap.docs[0].data() as Payment) }),
+    (err) => onError?.(err)
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Operator: weighing + quality check (Master Spec build order step 5)
+// ---------------------------------------------------------------------------
+
+export interface RecordWeighingResult {
+  procurementId: string;
+}
+
+/**
+ * Weighing screen (UI/UX spec Operator screen 4) — creates the procurement doc for a booking
+ * (idempotent: if the operator already weighed this booking once, e.g. after navigating back,
+ * the same doc is reused rather than duplicated) and notifies the farmer with the exact copy
+ * from Missing Details Polish sec. 1.
+ */
+export async function recordWeighing(input: {
+  bookingId: string;
+  farmerId: string;
+  actualWeight: number;
+}): Promise<RecordWeighingResult> {
+  const existing = await getDocs(
+    query(
+      collection(db, COLLECTIONS.procurement),
+      where("bookingId", "==", input.bookingId),
+      limit(1)
+    )
+  );
+  const procurementRef = existing.empty
+    ? doc(collection(db, COLLECTIONS.procurement))
+    : existing.docs[0].ref;
+  const notificationRef = doc(collection(db, COLLECTIONS.notifications));
+
+  await runTransaction(db, async (tx) => {
+    const procurement: Procurement = {
+      bookingId: input.bookingId,
+      actualWeight: input.actualWeight,
+      qualityStatus: "pending",
+      moisturePct: null,
+      grade: null,
+      procurementStatus: "weighed",
+    };
+    tx.set(procurementRef, procurement);
+
+    const notification: AppNotification = {
+      farmerId: input.farmerId,
+      type: "weighing_recorded",
+      message: `आपका वज़न दर्ज हुआ: ${input.actualWeight} किलो।`,
+      channel: "in_app",
+      status: "unread",
+      createdAt: serverTimestamp() as unknown as AppNotification["createdAt"],
+    };
+    tx.set(notificationRef, notification);
+  });
+
+  return { procurementId: procurementRef.id };
+}
+
+export interface QualityCheckInput {
+  procurementId: string;
+  bookingId: string;
+  queueId: string;
+  farmerId: string;
+  moisturePct: number;
+  grade: string;
+  decision: "accept" | "reject";
+  rejectionReason?: string;
+}
+
+/**
+ * Quality Check screen (UI/UX spec Operator screen 5) — Accept/Reject (the confirmation prompt
+ * the spec calls for happens in the UI before this is called). On reject, procurementStatus is
+ * set to "rejected" and the farmer keeps their produce with no payment obligation, per Missing
+ * Details Polish sec. 8. Either outcome closes out the booking/queue entry — the farmer's turn
+ * at the centre is over regardless of the quality outcome.
+ */
+export async function submitQualityCheck(input: QualityCheckInput): Promise<void> {
+  const procurementRef = doc(db, COLLECTIONS.procurement, input.procurementId);
+  const bookingRef = doc(db, COLLECTIONS.bookings, input.bookingId);
+  const queueRef = doc(db, COLLECTIONS.queue, input.queueId);
+  const notificationRef = doc(collection(db, COLLECTIONS.notifications));
+  const accepted = input.decision === "accept";
+
+  await runTransaction(db, async (tx) => {
+    tx.update(procurementRef, {
+      moisturePct: input.moisturePct,
+      grade: input.grade,
+      qualityStatus: accepted ? "accepted" : "rejected",
+      procurementStatus: accepted ? "completed" : "rejected",
+      ...(input.rejectionReason ? { rejectionReason: input.rejectionReason } : {}),
+    });
+    tx.update(bookingRef, { status: "completed" });
+    tx.update(queueRef, { status: "completed" });
+
+    const notification: AppNotification = {
+      farmerId: input.farmerId,
+      type: "quality_checked",
+      // Missing Details Polish sec. 1 gives the exact accept copy; a distinct reject copy
+      // isn't specified there, so this is a reasonable extension, not a verbatim doc quote.
+      message: accepted
+        ? `गुणवत्ता जांच पूरी — ग्रेड: ${input.grade}।`
+        : `गुणवत्ता जांच पूरी — अस्वीकार किया गया${input.rejectionReason ? `: ${input.rejectionReason}` : "।"}`,
+      channel: "in_app",
+      status: "unread",
+      createdAt: serverTimestamp() as unknown as AppNotification["createdAt"],
+    };
+    tx.set(notificationRef, notification);
+  });
 }

@@ -6,6 +6,8 @@ import { useOperator } from "../context/OperatorContext";
 import { StaffLoginScreen } from "../screens/operator/StaffLoginScreen";
 import { ScanCheckInScreen } from "../screens/operator/ScanCheckInScreen";
 import { LiveQueueManagementScreen } from "../screens/operator/LiveQueueManagementScreen";
+import { WeighingScreen } from "../screens/operator/WeighingScreen";
+import { QualityCheckScreen } from "../screens/operator/QualityCheckScreen";
 import { colors } from "../theme";
 
 const Stack = createNativeStackNavigator<OperatorStackParamList>();
@@ -36,6 +38,8 @@ export function OperatorNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="ScanCheckIn">
       <Stack.Screen name="ScanCheckIn" component={ScanCheckInScreen} />
       <Stack.Screen name="LiveQueueManagement" component={LiveQueueManagementScreen} />
+      <Stack.Screen name="Weighing" component={WeighingScreen} />
+      <Stack.Screen name="QualityCheck" component={QualityCheckScreen} />
     </Stack.Navigator>
   );
 }

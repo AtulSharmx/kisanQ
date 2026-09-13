@@ -20,6 +20,7 @@ interface Row {
   queue: QueueEntryWithId;
   tokenNumber: string;
   farmerName: string;
+  farmerId: string;
 }
 
 const TABS: { key: QueueStatus; label: string }[] = [
@@ -37,7 +38,9 @@ export function LiveQueueManagementScreen({ navigation }: Props) {
   const [rows, setRows] = useState<Row[]>([]);
   const [activeTab, setActiveTab] = useState<QueueStatus>("waiting");
   const [callingId, setCallingId] = useState<string | null>(null);
-  const detailsCache = useRef(new Map<string, { tokenNumber: string; farmerName: string }>());
+  const detailsCache = useRef(
+    new Map<string, { tokenNumber: string; farmerName: string; farmerId: string }>()
+  );
 
   useEffect(() => {
     if (!session?.assignedCentreId) return;
@@ -47,9 +50,13 @@ export function LiveQueueManagementScreen({ navigation }: Props) {
           const cached = detailsCache.current.get(queue.bookingId);
           if (cached) return { queue, ...cached };
           const booking = await getBooking(queue.bookingId);
-          if (!booking) return { queue, tokenNumber: "?", farmerName: "?" };
+          if (!booking) return { queue, tokenNumber: "?", farmerName: "?", farmerId: "" };
           const farmer = await getFarmer(booking.farmerId);
-          const details = { tokenNumber: booking.tokenNumber, farmerName: farmer?.name ?? "?" };
+          const details = {
+            tokenNumber: booking.tokenNumber,
+            farmerName: farmer?.name ?? "?",
+            farmerId: booking.farmerId,
+          };
           detailsCache.current.set(queue.bookingId, details);
           return { queue, ...details };
         })
@@ -114,6 +121,18 @@ export function LiveQueueManagementScreen({ navigation }: Props) {
                 label="अगला बुलाएं"
                 onPress={() => onCallNext(row.queue.id)}
                 loading={callingId === row.queue.id}
+              />
+            )}
+            {row.queue.status === "processing" && (
+              <PrimaryButton
+                label="तौल करें (Weigh)"
+                onPress={() =>
+                  navigation.navigate("Weighing", {
+                    bookingId: row.queue.bookingId,
+                    queueId: row.queue.id,
+                    farmerId: row.farmerId,
+                  })
+                }
               />
             )}
           </View>

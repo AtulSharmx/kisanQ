@@ -128,16 +128,40 @@ plugins, etc.) rather than relying on older training knowledge.
   fix is a Cloud Function that mints real custom claims on staff login, which needs the Blaze
   plan and is out of scope here. Don't "fix" this by adding a `get()`-based OR-branch to one of
   those read rules — it will silently break every list query on that collection again.
+- **`slots.bookedCount`** is incremented by the *farmer's own device* inside `createBooking()`'s
+  transaction, not by an operator — a real bug (found via an actual phone booking a slot)
+  before `slots` had any update rule a farmer could satisfy. The fix in `firestore.rules` scopes
+  it precisely with `diff(resource.data).affectedKeys().hasOnly(["bookedCount"])` plus an
+  exact `+1` check, rather than opening `slots` writes broadly — copy that pattern for any
+  future farmer-side field bump instead of relaxing the whole collection.
 - PIN hashing ([`src/services/pinAuth.ts`](src/services/pinAuth.ts)) is plain SHA-256, no salt —
   `scripts/seed.ts` hashes the demo PINs the same way (Node's `crypto.createHash`) so seeded
-  accounts can log in. Demo credentials: `staff-op-1` / PIN `1234` (operator), `staff-admin-1` /
-  PIN `9999` (admin, not yet used by any screen).
+  accounts can log in. Demo credentials (all PIN `1234`): `staff-op-1` (Karnal), `staff-op-2`
+  (Panipat), `staff-op-3` (Sonipat); `staff-admin-1` / PIN `9999` (admin, not yet used by any
+  screen — an admin logging in currently lands on the same Operator screens).
 - **Farmer Live Queue / Procurement Status** ([`src/screens/farmer/LiveQueueScreen.tsx`](src/screens/farmer/LiveQueueScreen.tsx),
   [`ProcurementStatusScreen.tsx`](src/screens/farmer/ProcurementStatusScreen.tsx)) listen live
-  via `listenQueueForCentre`/`listenBooking`/`listenProcurementForBooking` in
-  `firestoreService.ts` — no polling. "People ahead of you" is a *live* count derived from the
-  centre's whole queue (entries with `status != 'completed'` and a lower `position`), not the
-  `estimatedWaitMinutes` field frozen at check-in — that's what makes it visibly react the
-  instant an operator calls the next farmer. When build order step 5 adds the weighing/quality
-  screens and starts writing `procurement/{id}` docs, the Procurement Status ticks pick that up
-  automatically — no farmer-side change should be needed for that.
+  via `listenQueueForCentre`/`listenBooking`/`listenProcurementForBooking`/
+  `listenPaymentForProcurement` in `firestoreService.ts` — no polling. "People ahead of you" is
+  a *live* count derived from the centre's whole queue (entries with `status != 'completed'`
+  and a lower `position`), not the `estimatedWaitMinutes` field frozen at check-in. The
+  Procurement Status "Payment" tick reads the `payments` collection directly rather than
+  approximating from `booking.status` — that field flips to `"completed"` the moment
+  quality-check finishes (accepted *or* rejected), which is not the same thing as paid.
+- **`react-native-web`'s `Alert.alert` is a complete no-op stub** (confirmed by reading
+  `node_modules/react-native-web/src/exports/Alert/index.js` — it's a one-line empty function).
+  It works fine on native, but since the Operator only ever runs on web, any confirm-before-
+  action prompt on an Operator screen must use
+  [`src/components/ConfirmDialog.tsx`](src/components/ConfirmDialog.tsx) (a real `Modal`-based
+  dialog) instead — `Alert.alert` will silently swallow the action with no error and no dialog.
+  Farmer-only screens (native) can still use `Alert.alert` safely.
+- **Operator weighing + quality check** ([`src/screens/operator/WeighingScreen.tsx`](src/screens/operator/WeighingScreen.tsx),
+  [`QualityCheckScreen.tsx`](src/screens/operator/QualityCheckScreen.tsx)) are reached from a
+  "Processing" row in Live Queue Management, not from Scan/Check-in — `recordWeighing()` and
+  `submitQualityCheck()` in `firestoreService.ts` handle the writes. Both booking and queue
+  status become `"completed"` on either Accept *or* Reject (the farmer's turn at the centre is
+  over either way); only `procurement.qualityStatus`/`procurementStatus` distinguish the
+  outcome. `procurement/{id}` docs are scoped to an operator via the *booking's* centreId (a
+  `get()` on `bookings/{bookingId}`, single-document context, not a list query — see
+  `isOperatorForBooking()` in `firestore.rules`), since procurement docs don't carry their own
+  centreId.

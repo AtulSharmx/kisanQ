@@ -239,12 +239,25 @@ async function seed() {
     status: "booked",
   });
 
-  console.log("Seeding demo staff accounts (operator PIN 1234, admin PIN 9999)...");
+  console.log("Seeding demo staff accounts (one operator per centre, PIN 1234; admin PIN 9999)...");
+  const operatorPin = hashPin("1234");
   await db.collection("staff").doc("staff-op-1").set({
-    name: "Demo Operator",
+    name: "Demo Operator (Karnal)",
     role: "operator",
-    pinHash: hashPin("1234"),
-    assignedCentreId: demoCentre.id,
+    pinHash: operatorPin,
+    assignedCentreId: "centre-ksn",
+  });
+  await db.collection("staff").doc("staff-op-2").set({
+    name: "Demo Operator (Panipat)",
+    role: "operator",
+    pinHash: operatorPin,
+    assignedCentreId: "centre-pnp",
+  });
+  await db.collection("staff").doc("staff-op-3").set({
+    name: "Demo Operator (Sonipat)",
+    role: "operator",
+    pinHash: operatorPin,
+    assignedCentreId: "centre-snp",
   });
   await db.collection("staff").doc("staff-admin-1").set({
     name: "Demo Admin",
@@ -255,7 +268,7 @@ async function seed() {
 
   console.log(
     "Done. Demo booking token KSN-1048 has 2 people ahead of it in the queue. " +
-      "Operator login: staff-op-1 / PIN 1234."
+      "Operator logins (PIN 1234): staff-op-1 (Karnal), staff-op-2 (Panipat), staff-op-3 (Sonipat)."
   );
 }
 

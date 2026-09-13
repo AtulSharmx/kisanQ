@@ -10,13 +10,18 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.atulsharmx.kisanq",
       "adaptiveIcon": {
         "backgroundColor": "#1B5E3A",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -37,6 +42,17 @@
           "backgroundColor": "#1B5E3A"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "20a4f6c9-aab9-4929-8dbc-556114663596"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/20a4f6c9-aab9-4929-8dbc-556114663596"
+    }
   }
 }

@@ -11,6 +11,25 @@ Prototype for **SIH26032** — Ministry of Consumer Affairs, Food & Public Distr
 
 ---
 
+## 🚀 Live demo
+
+No local setup needed to try it — both surfaces are deployed against the real Firebase backend:
+
+| Surface | Link |
+|---|---|
+| **Operator / Admin** (web) | **[kisanq-farmer.web.app](https://kisanq-farmer.web.app)** |
+| **Farmer app** (Android) | **[Download APK](https://expo.dev/accounts/atulshxrma/projects/kisanq/builds/a401fcbf-3bb7-43f4-b18c-b9323d5b643a)** — open the link on an Android phone (or scan its QR code) and tap Install. No Play Store, no Expo account needed. |
+
+See [Demo credentials](#demo-credentials) below for the Staff ID/PIN to log into Operator/Admin.
+Farmers register through the app itself (any 12-digit Aadhaar, OTP shown on-screen).
+
+> **Note:** the Android build link is an EAS internal-distribution artifact, which expires
+> ~14 days after it was built (2026-09-13). If it's gone stale, rebuild it with
+> `eas build --platform android --profile preview` (see [`eas.json`](eas.json)) — everything
+> needed (Firebase config, keystore) is already configured on the EAS project.
+
+---
+
 ## The problem
 
 A farmer brings their crop to an MSP procurement centre and hands it over — and from that
@@ -124,6 +143,34 @@ npm run web      # Operator / Admin web build
 Farmers register through the app itself (Aadhaar entry accepts any 12 digits; the OTP screen
 shows the demo code on-screen).
 
+## Deployment
+
+Both live-demo surfaces above are deployed from this same codebase, against the same Firebase
+project — no separate backend to stand up.
+
+**Operator / Admin (web) → Firebase Hosting:**
+
+```bash
+npx expo export --platform web   # static build, output to dist/
+npx firebase deploy --only hosting
+```
+
+`firebase.json`'s `hosting` config already points at `dist/` with a single-page-app rewrite
+(every route falls back to `index.html`, since routing is client-side via React Navigation).
+
+**Farmer app (Android) → EAS Build:**
+
+```bash
+eas build --platform android --profile preview
+```
+
+`eas.json`'s `preview` profile produces a directly-installable APK (`distribution: "internal"`,
+`buildType: "apk"`) rather than a Play Store bundle — no store review needed, just a shareable
+link/QR code. The EAS project already has the Android keystore and the `EXPO_PUBLIC_FIREBASE_*`
+values needed for the build set as [EAS environment variables](https://docs.expo.dev/eas/environment-variables/)
+(cloud builds don't see the local, git-ignored `.env` file, so these have to be set separately —
+`eas env:set preview --name <NAME> --value <VALUE>` for each one, matching `.env.example`).
+
 ## Project structure
 
 ```
@@ -132,7 +179,11 @@ kisanQ/
 ├── firebaseConfig.ts         # Reads Firebase config from env vars
 ├── firestore.rules           # Role-scoped security rules
 ├── firestore.indexes.json
-├── scripts/seed.ts           # Demo data seeder (npm run seed)
+├── firebase.json             # Firestore + Hosting config (Operator/Admin web deploy)
+├── eas.json                  # EAS Build profiles (Farmer app Android APK)
+├── scripts/
+│   ├── seed.ts               # Demo data seeder (npm run seed)
+│   └── reset.ts              # Wipes rehearsal traffic before a demo (npm run reset)
 ├── src/
 │   ├── screens/
 │   │   ├── farmer/           # Registration → token → live queue → procurement status

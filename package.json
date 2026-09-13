@@ -10,6 +10,7 @@
     "expo": "~57.0.22",
     "expo-camera": "~57.0.5",
     "expo-crypto": "~57.0.3",
+    "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "firebase": "^12.19.0",
     "react": "19.2.3",
@@ -33,7 +34,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "reset": "tsx scripts/reset.ts"
   },
   "private": true
 }

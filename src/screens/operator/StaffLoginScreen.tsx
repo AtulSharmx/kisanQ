@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
-import { colors, fontSize, radius, spacing } from "../../theme";
+import { colors, fontSize, radius, shadow, spacing, touchTarget } from "../../theme";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { useOperator } from "../../context/OperatorContext";
 
@@ -66,6 +66,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.xl,
+    ...shadow.card,
   },
   title: {
     fontSize: fontSize.header,
@@ -76,7 +77,7 @@ const styles = StyleSheet.create({
   },
   label: { fontSize: fontSize.body, color: colors.textMuted, marginBottom: spacing.xs },
   input: {
-    minHeight: 48,
+    minHeight: touchTarget,
     borderWidth: 2,
     borderColor: colors.border,
     borderRadius: radius.md,

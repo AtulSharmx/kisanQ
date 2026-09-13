@@ -22,10 +22,16 @@ export function SplashScreen({ navigation }: Props) {
       <Text style={styles.appName}>{t("appName")}</Text>
       <Text style={styles.title}>{t("langSelectTitle")}</Text>
       <View style={styles.buttons}>
-        <Pressable style={styles.langBtn} onPress={() => choose("hi")}>
+        <Pressable
+          style={({ pressed }) => [styles.langBtn, pressed && styles.pressed]}
+          onPress={() => choose("hi")}
+        >
           <Text style={styles.langLabel}>हिंदी</Text>
         </Pressable>
-        <Pressable style={styles.langBtn} onPress={() => choose("en")}>
+        <Pressable
+          style={({ pressed }) => [styles.langBtn, pressed && styles.pressed]}
+          onPress={() => choose("en")}
+        >
           <Text style={styles.langLabel}>English</Text>
         </Pressable>
       </View>
@@ -54,4 +60,5 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   langLabel: { color: colors.white, fontSize: fontSize.header, fontWeight: "700" },
+  pressed: { opacity: 0.7 },
 });

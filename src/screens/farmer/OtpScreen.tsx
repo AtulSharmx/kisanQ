@@ -63,7 +63,11 @@ export function OtpScreen({ route, navigation }: Props) {
       <View style={styles.spacer} />
       <PrimaryButton label={t("continueBtn")} onPress={onVerify} disabled={otp.length < 6} />
 
-      <Pressable onPress={() => setCountdown(RESEND_SECONDS)} disabled={countdown > 0} style={styles.resendRow}>
+      <Pressable
+        onPress={() => setCountdown(RESEND_SECONDS)}
+        disabled={countdown > 0}
+        style={({ pressed }) => [styles.resendRow, pressed && styles.pressed]}
+      >
         <Text style={[styles.resend, countdown > 0 && styles.resendDisabled]}>
           {t("resendOtp")} {countdown > 0 ? `(${countdown}s)` : ""}
         </Text>
@@ -72,7 +76,10 @@ export function OtpScreen({ route, navigation }: Props) {
       {verifyingFingerprint ? (
         <Text style={styles.fingerprintStatus}>👆 {t("verifyingFingerprint")}</Text>
       ) : (
-        <Pressable onPress={onFingerprintFallback} style={styles.fallbackRow}>
+        <Pressable
+          onPress={onFingerprintFallback}
+          style={({ pressed }) => [styles.fallbackRow, pressed && styles.pressed]}
+        >
           <Text style={styles.fallbackLink}>👆 {t("otpFailFallback")}</Text>
         </Pressable>
       )}
@@ -114,4 +121,5 @@ const styles = StyleSheet.create({
     fontSize: fontSize.body,
     fontWeight: "700",
   },
+  pressed: { opacity: 0.7 },
 });

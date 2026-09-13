@@ -38,7 +38,10 @@ export function SlotBookingScreen({ route, navigation }: Props) {
       navigation.replace("Token", { bookingId: result.bookingId });
     } catch (e) {
       console.error(e);
-      setError(e instanceof Error ? e.message : t("saveFailed"));
+      // createBooking() throws the stable code "SLOT_FULL" (not user-facing text) for this
+      // specific race condition, so it can be shown in Hindi like every other error on this
+      // screen instead of leaking the raw English Error message.
+      setError(e instanceof Error && e.message === "SLOT_FULL" ? t("slotJustFilled") : t("saveFailed"));
       // Slot may have just filled up under us — refresh the list so it reflects reality.
       listSlotsForCentreToday(centreId).then(setSlots);
       setSelected(null);
@@ -66,10 +69,11 @@ export function SlotBookingScreen({ route, navigation }: Props) {
               key={slot.id}
               disabled={full}
               onPress={() => setSelected(slot.id)}
-              style={[
+              style={({ pressed }) => [
                 styles.slot,
                 full && styles.slotFull,
                 selected === slot.id && styles.slotActive,
+                pressed && styles.pressed,
               ]}
             >
               <Text style={[styles.slotText, full && styles.slotTextFull]}>
@@ -106,10 +110,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  slotActive: { borderColor: colors.primary, backgroundColor: "#E7F3EC" },
+  slotActive: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
   slotFull: { backgroundColor: colors.disabled, borderColor: colors.disabled },
   slotText: { fontSize: fontSize.label, fontWeight: "700", color: colors.text },
   slotTextFull: { color: colors.textMuted, textDecorationLine: "line-through" },
   error: { color: colors.error, textAlign: "center", marginTop: spacing.md },
   spacer: { height: spacing.xl },
+  pressed: { opacity: 0.7 },
 });

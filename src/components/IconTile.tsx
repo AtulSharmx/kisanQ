@@ -34,7 +34,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     gap: spacing.xs,
   },
-  pressed: { opacity: 0.8, backgroundColor: colors.background },
+  pressed: { opacity: 0.7, backgroundColor: colors.background },
   icon: { fontSize: 34 },
   label: {
     fontSize: fontSize.body,

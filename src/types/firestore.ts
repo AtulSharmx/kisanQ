@@ -71,7 +71,8 @@ export type BookingStatus =
   | "arrived"
   | "processing"
   | "completed"
-  | "no_show";
+  | "no_show"
+  | "cancelled";
 
 /**
  * bookings/{bookingId}

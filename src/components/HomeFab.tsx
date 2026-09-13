@@ -1,7 +1,7 @@
 import React from "react";
 import { Pressable, StyleSheet, Text } from "react-native";
 import { CommonActions, useNavigation } from "@react-navigation/native";
-import { colors, radius, touchTarget } from "../theme";
+import { colors, radius, shadow, touchTarget } from "../theme";
 
 /** Persistent top-left home icon — always returns to the dashboard (UI/UX spec). */
 export function HomeFab() {
@@ -13,7 +13,7 @@ export function HomeFab() {
       onPress={() =>
         navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: "Home" }] }))
       }
-      style={styles.fab}
+      style={({ pressed }) => [styles.fab, pressed && styles.pressed]}
     >
       <Text style={styles.icon}>🏠</Text>
     </Pressable>
@@ -33,7 +33,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
     borderColor: colors.border,
-    elevation: 2,
+    ...shadow.fab,
   },
-  icon: { fontSize: 22 },
+  icon: { fontSize: 24 },
+  pressed: { opacity: 0.7 },
 });

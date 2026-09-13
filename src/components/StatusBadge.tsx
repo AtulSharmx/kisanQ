@@ -19,9 +19,9 @@ export function StatusBadge({ icon, label, tone }: Props) {
 }
 
 const toneStyles = StyleSheet.create({
-  success: { backgroundColor: "#E7F3EC", borderColor: colors.primary },
-  warning: { backgroundColor: "#FBF1DC", borderColor: colors.accent },
-  error: { backgroundColor: "#FBEAE8", borderColor: colors.error },
+  success: { backgroundColor: colors.primaryTint, borderColor: colors.primary },
+  warning: { backgroundColor: colors.accentTint, borderColor: colors.accent },
+  error: { backgroundColor: colors.errorTint, borderColor: colors.error },
   neutral: { backgroundColor: colors.background, borderColor: colors.border },
 });
 

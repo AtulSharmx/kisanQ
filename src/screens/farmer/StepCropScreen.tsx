@@ -18,7 +18,7 @@ const CROPS = [
 
 /** Additional Info, Step B: crop icon-picker + quantity stepper (UI/UX spec section 4). */
 export function StepCropScreen({ route, navigation }: Props) {
-  const { village } = route.params;
+  const { aadhaar, village } = route.params;
   const { t, lang } = useLanguage();
   const [cropType, setCropType] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(20);
@@ -33,7 +33,11 @@ export function StepCropScreen({ route, navigation }: Props) {
           <Pressable
             key={c.key}
             onPress={() => setCropType(c.key)}
-            style={[styles.cropCard, cropType === c.key && styles.cropCardActive]}
+            style={({ pressed }) => [
+              styles.cropCard,
+              cropType === c.key && styles.cropCardActive,
+              pressed && styles.pressed,
+            ]}
           >
             <Text style={styles.cropIcon}>{c.icon}</Text>
             <Text style={styles.cropLabel}>
@@ -47,13 +51,16 @@ export function StepCropScreen({ route, navigation }: Props) {
       <Text style={styles.label}>{t("cropQuantityLabel")}</Text>
       <View style={styles.stepper}>
         <Pressable
-          style={styles.stepBtn}
+          style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}
           onPress={() => setQuantity((q) => Math.max(1, q - 5))}
         >
           <Text style={styles.stepBtnText}>−</Text>
         </Pressable>
         <Text style={styles.quantityValue}>{quantity}</Text>
-        <Pressable style={styles.stepBtn} onPress={() => setQuantity((q) => q + 5)}>
+        <Pressable
+          style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}
+          onPress={() => setQuantity((q) => q + 5)}
+        >
           <Text style={styles.stepBtnText}>+</Text>
         </Pressable>
       </View>
@@ -63,7 +70,12 @@ export function StepCropScreen({ route, navigation }: Props) {
         label={t("continueBtn")}
         onPress={() =>
           cropType &&
-          navigation.navigate("StepCentre", { village, cropType, expectedQuantity: quantity })
+          navigation.navigate("StepCentre", {
+            aadhaar,
+            village,
+            cropType,
+            expectedQuantity: quantity,
+          })
         }
         disabled={!cropType}
       />
@@ -85,7 +97,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: spacing.xs,
   },
-  cropCardActive: { borderColor: colors.primary, backgroundColor: "#E7F3EC" },
+  cropCardActive: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
   cropIcon: { fontSize: 40 },
   cropLabel: { fontSize: fontSize.label, fontWeight: "700", color: colors.text },
   label: { fontSize: fontSize.body, color: colors.textMuted, marginBottom: spacing.sm },
@@ -101,4 +113,5 @@ const styles = StyleSheet.create({
   stepBtnText: { color: colors.white, fontSize: 28, fontWeight: "700", lineHeight: 30 },
   quantityValue: { fontSize: fontSize.display, fontWeight: "800", color: colors.text, minWidth: 70, textAlign: "center" },
   spacer: { height: spacing.xl },
+  pressed: { opacity: 0.7 },
 });

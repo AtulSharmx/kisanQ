@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { CommonActions } from "@react-navigation/native";
 import { Timestamp } from "firebase/firestore";
@@ -22,10 +22,10 @@ type Props = NativeStackScreenProps<RootStackParamList, "StepCentre">;
 
 /** Additional Info, Step C: preferred centre — the final onboarding step (UI/UX spec sec. 4). */
 export function StepCentreScreen({ route, navigation }: Props) {
-  const { village, cropType, expectedQuantity } = route.params;
+  const { aadhaar, village, cropType, expectedQuantity } = route.params;
   const { t } = useLanguage();
   const { farmerId, setFarmer } = useFarmer();
-  const [centres, setCentres] = useState<CentreWithId[]>([]);
+  const [centres, setCentres] = useState<CentreWithId[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,11 +41,12 @@ export function StepCentreScreen({ route, navigation }: Props) {
     setSaving(true);
     setError(null);
     try {
-      // The Aadhaar number itself was never persisted past the OTP screen — we don't have it
-      // here, so we derive the same demo profile deterministically from the farmer's uid
-      // instead. In a real Aadhaar+UIDAI integration this data would come back from the OTP
-      // verification response, not be re-derived like this.
-      const profile = mockAadhaarLookup(farmerId);
+      // Must derive from the same `aadhaar` value ProfileConfirmScreen used, not the farmer's
+      // uid — otherwise the profile the farmer confirmed on screen wouldn't match what actually
+      // gets saved here. The raw Aadhaar number is only ever passed through navigation params
+      // in memory (never written to Firestore — see CLAUDE.md rule 5 / identityVerification's
+      // referenceToken) and is dropped once this screen finishes.
+      const profile = mockAadhaarLookup(aadhaar);
       const farmer = {
         name: profile.name,
         mobile: profile.mobile,
@@ -62,7 +63,7 @@ export function StepCentreScreen({ route, navigation }: Props) {
         state: profile.state,
         district: profile.district,
         village,
-        referenceToken: makeReferenceToken(farmerId),
+        referenceToken: makeReferenceToken(aadhaar),
       });
       await addCrop({ farmerId, cropType, expectedQuantity, preferredCentreId: selected });
       setFarmer(farmer);
@@ -80,22 +81,30 @@ export function StepCentreScreen({ route, navigation }: Props) {
       <ProgressDots total={3} current={2} />
       <Text style={styles.title}>{t("stepCentreTitle")}</Text>
 
-      <FlatList
-        data={centres}
-        keyExtractor={(c) => c.id}
-        renderItem={({ item }) => (
-          <Pressable
-            style={[styles.item, selected === item.id && styles.itemActive]}
-            onPress={() => setSelected(item.id)}
-          >
-            <View>
-              <Text style={styles.itemName}>{item.name}</Text>
-              <Text style={styles.itemDistrict}>{item.district}</Text>
-            </View>
-            {selected === item.id && <Text style={styles.checkmark}>✓</Text>}
-          </Pressable>
-        )}
-      />
+      {centres === null ? (
+        <ActivityIndicator color={colors.primary} style={styles.loader} />
+      ) : (
+        <FlatList
+          data={centres}
+          keyExtractor={(c) => c.id}
+          renderItem={({ item }) => (
+            <Pressable
+              style={({ pressed }) => [
+                styles.item,
+                selected === item.id && styles.itemActive,
+                pressed && styles.pressed,
+              ]}
+              onPress={() => setSelected(item.id)}
+            >
+              <View>
+                <Text style={styles.itemName}>{item.name}</Text>
+                <Text style={styles.itemDistrict}>{item.district}</Text>
+              </View>
+              {selected === item.id && <Text style={styles.checkmark}>✓</Text>}
+            </Pressable>
+          )}
+        />
+      )}
 
       {error && <Text style={styles.error}>{error}</Text>}
       <PrimaryButton
@@ -122,9 +131,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     marginBottom: spacing.sm,
   },
-  itemActive: { borderColor: colors.primary, backgroundColor: "#E7F3EC" },
+  itemActive: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
   itemName: { fontSize: fontSize.label, fontWeight: "700", color: colors.text },
   itemDistrict: { fontSize: fontSize.body, color: colors.textMuted },
   checkmark: { fontSize: fontSize.header, fontWeight: "800", color: colors.primary },
   error: { color: colors.error, textAlign: "center", marginBottom: spacing.sm },
+  pressed: { opacity: 0.7 },
+  loader: { marginTop: spacing.xl },
 });

@@ -2,9 +2,9 @@ import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { OperatorStackParamList } from "../../navigation/operatorTypes";
-import { colors, fontSize, radius, spacing } from "../../theme";
+import { colors, fontSize, radius, shadow, spacing } from "../../theme";
 import { useOperator } from "../../context/OperatorContext";
-import { getAdminOverview, type AdminOverview } from "../../services/firestoreService";
+import { listenAdminOverview, type AdminOverview } from "../../services/firestoreService";
 
 type Props = NativeStackScreenProps<OperatorStackParamList, "AdminOverview">;
 
@@ -19,7 +19,8 @@ export function AdminOverviewScreen({ navigation }: Props) {
   const [overview, setOverview] = useState<AdminOverview | null>(null);
 
   useEffect(() => {
-    getAdminOverview().then(setOverview);
+    const unsubscribe = listenAdminOverview(setOverview);
+    return unsubscribe;
   }, []);
 
   if (!overview) {
@@ -44,10 +45,13 @@ export function AdminOverviewScreen({ navigation }: Props) {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Admin Overview ({staffName})</Text>
         <View style={styles.headerActions}>
-          <Pressable onPress={() => navigation.navigate("AdminDrilldown")}>
+          <Pressable
+            onPress={() => navigation.navigate("AdminDrilldown")}
+            style={({ pressed }) => pressed && styles.pressed}
+          >
             <Text style={styles.headerLink}>District → Centre →</Text>
           </Pressable>
-          <Pressable onPress={logout}>
+          <Pressable onPress={logout} style={({ pressed }) => pressed && styles.pressed}>
             <Text style={styles.headerLink}>Log out</Text>
           </Pressable>
         </View>
@@ -98,8 +102,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.lg,
     alignItems: "center",
+    ...shadow.card,
     gap: spacing.xs,
   },
   cardValue: { fontSize: fontSize.display, fontWeight: "800", color: colors.primary },
   cardLabel: { fontSize: fontSize.body, color: colors.textMuted, textAlign: "center" },
+  pressed: { opacity: 0.7 },
 });

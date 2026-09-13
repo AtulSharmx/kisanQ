@@ -24,7 +24,8 @@ const VILLAGES = [
 ];
 
 /** Additional Info, Step A: village — searchable list, not free text (UI/UX spec section 4). */
-export function StepVillageScreen({ navigation }: Props) {
+export function StepVillageScreen({ route, navigation }: Props) {
+  const { aadhaar } = route.params;
   const { t } = useLanguage();
   const [search, setSearch] = useState("");
   const filtered = VILLAGES.filter((v) => v.toLowerCase().includes(search.toLowerCase()));
@@ -45,8 +46,8 @@ export function StepVillageScreen({ navigation }: Props) {
         keyExtractor={(item) => item}
         renderItem={({ item }) => (
           <Pressable
-            style={styles.item}
-            onPress={() => navigation.navigate("StepCrop", { village: item })}
+            style={({ pressed }) => [styles.item, pressed && styles.pressed]}
+            onPress={() => navigation.navigate("StepCrop", { aadhaar, village: item })}
           >
             <Text style={styles.itemText}>{item}</Text>
           </Pressable>
@@ -77,4 +78,5 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   itemText: { fontSize: fontSize.label, color: colors.text },
+  pressed: { opacity: 0.7 },
 });

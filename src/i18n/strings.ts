@@ -75,6 +75,10 @@ export const strings = {
   homeHelp: { hi: "सहायता", en: "Help/Call" },
   comingSoon: { hi: "यह सुविधा जल्द आ रही है", en: "This feature is coming soon" },
   emptyMyProduce: { hi: "अभी कोई फसल जोड़ी नहीं गई", en: "No crops added yet" },
+  cropQtyExpected: {
+    hi: "अनुमानित मात्रा: {n} क्विंटल",
+    en: "Expected quantity: {n} quintals",
+  },
   emptyNotifications: { hi: "अभी कोई सूचना नहीं", en: "No notifications yet" },
   emptyLiveQueue: { hi: "आपकी कोई बुकिंग नहीं है", en: "You have no active booking" },
   emptyPayment: { hi: "अभी कोई भुगतान नहीं", en: "No payment yet" },
@@ -120,10 +124,16 @@ export const strings = {
   },
   cancelConfirmYes: { hi: "हाँ, रद्द करें", en: "Yes, cancel" },
   cancelConfirmNo: { hi: "नहीं", en: "No" },
+  cancelBookingBtn: { hi: "स्लॉट रद्द करें", en: "Cancel booking" },
+  bookingCancelled: { hi: "आपकी स्लॉट रद्द कर दी गई है", en: "Your booking has been cancelled" },
 
   noInternet: { hi: "इंटरनेट कनेक्शन जांचें", en: "Check your internet connection" },
   retry: { hi: "पुनः प्रयास करें", en: "Retry" },
   saveFailed: { hi: "सेव नहीं हुआ, दोबारा कोशिश करें", en: "Save failed, please try again" },
+  slotJustFilled: {
+    hi: "यह स्लॉट अभी भर गया — कृपया दूसरा स्लॉट चुनें",
+    en: "This slot just filled up — please pick another",
+  },
 
   loading: { hi: "लोड हो रहा है...", en: "Loading..." },
   back: { hi: "वापस", en: "Back" },

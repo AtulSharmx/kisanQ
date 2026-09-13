@@ -5,7 +5,7 @@ import type { OperatorStackParamList } from "../../navigation/operatorTypes";
 import { colors, fontSize, radius, spacing } from "../../theme";
 import { useOperator } from "../../context/OperatorContext";
 import {
-  getAdminCentreBreakdown,
+  listenAdminCentreBreakdown,
   OVERLOAD_THRESHOLD_PCT,
   type CentreBreakdown,
 } from "../../services/firestoreService";
@@ -24,7 +24,8 @@ export function AdminDrilldownScreen({ navigation }: Props) {
   const [rows, setRows] = useState<CentreBreakdown[] | null>(null);
 
   useEffect(() => {
-    getAdminCentreBreakdown().then(setRows);
+    const unsubscribe = listenAdminCentreBreakdown(setRows);
+    return unsubscribe;
   }, []);
 
   const byDistrict = useMemo(() => {
@@ -42,7 +43,10 @@ export function AdminDrilldownScreen({ navigation }: Props) {
     <View style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>District → Centre ({staffName})</Text>
-        <Pressable onPress={() => navigation.navigate("AdminOverview")}>
+        <Pressable
+          onPress={() => navigation.navigate("AdminOverview")}
+          style={({ pressed }) => pressed && styles.pressed}
+        >
           <Text style={styles.headerLink}>← Overview</Text>
         </Pressable>
       </View>
@@ -130,4 +134,5 @@ const styles = StyleSheet.create({
   centreName: { fontWeight: "700" },
   overloadedText: { color: colors.error, fontWeight: "700" },
   footnote: { marginTop: spacing.lg, color: colors.textMuted, fontSize: fontSize.body },
+  pressed: { opacity: 0.7 },
 });

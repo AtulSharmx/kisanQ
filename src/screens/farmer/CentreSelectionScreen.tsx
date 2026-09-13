@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
-import { colors, fontSize, radius, spacing } from "../../theme";
+import { colors, fontSize, radius, shadow, spacing } from "../../theme";
 import { useLanguage } from "../../context/LanguageContext";
 import { useFarmer } from "../../context/FarmerContext";
 import { ScreenContainer } from "../../components/ScreenContainer";
@@ -82,7 +82,7 @@ export function CentreSelectionScreen({ route, navigation }: Props) {
         keyExtractor={(r) => r.centre.id}
         renderItem={({ item, index }) => (
           <Pressable
-            style={styles.card}
+            style={({ pressed }) => [styles.card, pressed && styles.pressed]}
             disabled={booking}
             onPress={() => onSelectCentre(item.centre.id)}
           >
@@ -120,6 +120,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.md,
     gap: spacing.xs,
+    ...shadow.card,
   },
   starBadge: { marginBottom: spacing.xs },
   starText: { color: colors.accent, fontWeight: "700", fontSize: fontSize.body },
@@ -128,4 +129,5 @@ const styles = StyleSheet.create({
   meta: { fontSize: fontSize.body, color: colors.textMuted },
   slotsOk: { color: colors.primary, fontWeight: "700" },
   slotsFull: { color: colors.error, fontWeight: "700" },
+  pressed: { opacity: 0.7 },
 });

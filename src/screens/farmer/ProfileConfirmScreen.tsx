@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
-import { colors, fontSize, radius, spacing, touchTarget } from "../../theme";
+import { colors, fontSize, radius, shadow, spacing, touchTarget } from "../../theme";
 import { useLanguage } from "../../context/LanguageContext";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { ScreenContainer } from "../../components/ScreenContainer";
@@ -40,11 +40,11 @@ export function ProfileConfirmScreen({ route, navigation }: Props) {
       <View style={styles.spacer} />
       <PrimaryButton
         label={t("profileConfirmBtn")}
-        onPress={() => navigation.navigate("StepVillage")}
+        onPress={() => navigation.navigate("StepVillage", { aadhaar })}
       />
       <Pressable
         onPress={() => Alert.alert(t("wrongInfoLink"))}
-        style={styles.wrongInfo}
+        style={({ pressed }) => [styles.wrongInfo, pressed && styles.pressed]}
       >
         <Text style={styles.wrongInfoText}>✏️ {t("wrongInfoLink")}</Text>
       </Pressable>
@@ -61,6 +61,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.lg,
     gap: spacing.md,
+    ...shadow.card,
   },
   row: { flexDirection: "row", justifyContent: "space-between" },
   rowLabel: { fontSize: fontSize.body, color: colors.textMuted },
@@ -73,4 +74,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   wrongInfoText: { color: colors.primary, fontSize: fontSize.body, textDecorationLine: "underline" },
+  pressed: { opacity: 0.7 },
 });

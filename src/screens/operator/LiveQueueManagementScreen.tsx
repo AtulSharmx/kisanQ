@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { OperatorStackParamList } from "../../navigation/operatorTypes";
 import { colors, fontSize, radius, spacing } from "../../theme";
@@ -36,6 +36,7 @@ const TABS: { key: QueueStatus; label: string }[] = [
 export function LiveQueueManagementScreen({ navigation }: Props) {
   const { session, staffName } = useOperator();
   const [rows, setRows] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<QueueStatus>("waiting");
   const [callingId, setCallingId] = useState<string | null>(null);
   const detailsCache = useRef(
@@ -62,6 +63,7 @@ export function LiveQueueManagementScreen({ navigation }: Props) {
         })
       );
       setRows(withDetails);
+      setLoading(false);
     });
     return unsubscribe;
   }, [session?.assignedCentreId]);
@@ -86,7 +88,10 @@ export function LiveQueueManagementScreen({ navigation }: Props) {
     <View style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>लाइव कतार ({staffName})</Text>
-        <Pressable onPress={() => navigation.navigate("ScanCheckIn")}>
+        <Pressable
+          onPress={() => navigation.navigate("ScanCheckIn")}
+          style={({ pressed }) => pressed && styles.pressed}
+        >
           <Text style={styles.headerLink}>← स्कैन/चेक-इन</Text>
         </Pressable>
       </View>
@@ -96,7 +101,11 @@ export function LiveQueueManagementScreen({ navigation }: Props) {
           <Pressable
             key={tab.key}
             onPress={() => setActiveTab(tab.key)}
-            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
+            style={({ pressed }) => [
+              styles.tab,
+              activeTab === tab.key && styles.tabActive,
+              pressed && styles.pressed,
+            ]}
           >
             <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
               {tab.label} ({rows.filter((r) => r.queue.status === tab.key).length})
@@ -106,7 +115,10 @@ export function LiveQueueManagementScreen({ navigation }: Props) {
       </View>
 
       <ScrollView contentContainerStyle={styles.list}>
-        {visibleRows.length === 0 && <Text style={styles.empty}>कोई प्रविष्टि नहीं</Text>}
+        {loading && <ActivityIndicator color={colors.primary} style={styles.loader} />}
+        {!loading && visibleRows.length === 0 && (
+          <Text style={styles.empty}>कोई प्रविष्टि नहीं</Text>
+        )}
         {visibleRows.map((row) => (
           <View key={row.queue.id} style={styles.row}>
             <View>
@@ -183,4 +195,6 @@ const styles = StyleSheet.create({
   token: { fontSize: fontSize.label, fontWeight: "800", color: colors.primary },
   name: { fontSize: fontSize.body, color: colors.text },
   wait: { fontSize: fontSize.body, color: colors.textMuted },
+  pressed: { opacity: 0.7 },
+  loader: { marginTop: spacing.xl },
 });

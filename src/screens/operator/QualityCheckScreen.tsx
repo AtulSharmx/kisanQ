@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { CommonActions } from "@react-navigation/native";
 import type { OperatorStackParamList } from "../../navigation/operatorTypes";
-import { colors, fontSize, radius, spacing, touchTarget } from "../../theme";
+import { colors, fontSize, radius, shadow, spacing, touchTarget } from "../../theme";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { submitQualityCheck } from "../../services/firestoreService";
@@ -82,13 +82,16 @@ export function QualityCheckScreen({ route, navigation }: Props) {
         <Text style={styles.label}>नमी % (Moisture %)</Text>
         <View style={styles.stepper}>
           <Pressable
-            style={styles.stepBtn}
+            style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}
             onPress={() => setMoisturePct((m) => Math.max(0, m - 0.5))}
           >
             <Text style={styles.stepBtnText}>−</Text>
           </Pressable>
           <Text style={styles.stepperValue}>{moisturePct.toFixed(1)}%</Text>
-          <Pressable style={styles.stepBtn} onPress={() => setMoisturePct((m) => m + 0.5)}>
+          <Pressable
+            style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}
+            onPress={() => setMoisturePct((m) => m + 0.5)}
+          >
             <Text style={styles.stepBtnText}>+</Text>
           </Pressable>
         </View>
@@ -99,7 +102,11 @@ export function QualityCheckScreen({ route, navigation }: Props) {
             <Pressable
               key={g}
               onPress={() => setGrade(g)}
-              style={[styles.gradeChip, grade === g && styles.gradeChipActive]}
+              style={({ pressed }) => [
+                styles.gradeChip,
+                grade === g && styles.gradeChipActive,
+                pressed && styles.pressed,
+              ]}
             >
               <Text style={[styles.gradeChipText, grade === g && styles.gradeChipTextActive]}>
                 {g}
@@ -181,6 +188,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.lg,
     gap: spacing.sm,
+    ...shadow.card,
   },
   row: { flexDirection: "row", justifyContent: "space-between" },
   rowLabel: { color: colors.textMuted },
@@ -208,11 +216,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  gradeChipActive: { borderColor: colors.primary, backgroundColor: "#E7F3EC" },
+  gradeChipActive: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
   gradeChipText: { fontSize: fontSize.header, fontWeight: "700", color: colors.text },
   gradeChipTextActive: { color: colors.primary },
   reasonInput: {
-    minHeight: 48,
+    minHeight: touchTarget,
     borderWidth: 2,
     borderColor: colors.border,
     borderRadius: radius.md,
@@ -224,4 +232,5 @@ const styles = StyleSheet.create({
   error: { color: colors.error, textAlign: "center" },
   spacer: { height: spacing.sm },
   spacerSmall: { height: spacing.xs },
+  pressed: { opacity: 0.7 },
 });

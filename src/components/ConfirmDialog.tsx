@@ -1,6 +1,6 @@
 import React from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, fontSize, radius, spacing } from "../theme";
+import { colors, fontSize, radius, shadow, spacing, touchTarget } from "../theme";
 
 interface Props {
   visible: boolean;
@@ -34,11 +34,18 @@ export function ConfirmDialog({
         <View style={styles.card}>
           <Text style={styles.title}>{title}</Text>
           <View style={styles.buttons}>
-            <Pressable style={[styles.button, styles.cancelButton]} onPress={onCancel}>
+            <Pressable
+              style={({ pressed }) => [styles.button, styles.cancelButton, pressed && styles.pressed]}
+              onPress={onCancel}
+            >
               <Text style={styles.cancelText}>{cancelLabel}</Text>
             </Pressable>
             <Pressable
-              style={[styles.button, destructive ? styles.destructiveButton : styles.confirmButton]}
+              style={({ pressed }) => [
+                styles.button,
+                destructive ? styles.destructiveButton : styles.confirmButton,
+                pressed && styles.pressed,
+              ]}
               onPress={onConfirm}
             >
               <Text style={styles.confirmText}>{confirmLabel}</Text>
@@ -65,12 +72,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.lg,
     gap: spacing.lg,
+    ...shadow.card,
   },
   title: { fontSize: fontSize.label, fontWeight: "700", color: colors.text, textAlign: "center" },
   buttons: { flexDirection: "row", gap: spacing.md },
   button: {
     flex: 1,
-    minHeight: 48,
+    minHeight: touchTarget,
     borderRadius: radius.md,
     alignItems: "center",
     justifyContent: "center",
@@ -80,4 +88,5 @@ const styles = StyleSheet.create({
   confirmButton: { backgroundColor: colors.primary },
   destructiveButton: { backgroundColor: colors.error },
   confirmText: { color: colors.white, fontWeight: "700" },
+  pressed: { opacity: 0.7 },
 });

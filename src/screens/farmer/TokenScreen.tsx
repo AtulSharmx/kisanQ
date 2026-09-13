@@ -4,11 +4,13 @@ import QRCode from "react-native-qrcode-svg";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { CommonActions } from "@react-navigation/native";
 import type { RootStackParamList } from "../../navigation/types";
-import { colors, fontSize, radius, spacing } from "../../theme";
+import { colors, fontSize, radius, shadow, spacing } from "../../theme";
 import { useLanguage } from "../../context/LanguageContext";
 import { ScreenContainer } from "../../components/ScreenContainer";
 import { PrimaryButton } from "../../components/PrimaryButton";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 import {
+  cancelBooking,
   getBooking,
   getCentre,
   getSlot,
@@ -35,6 +37,9 @@ export function TokenScreen({ route, navigation }: Props) {
   const { bookingId } = route.params;
   const { t } = useLanguage();
   const [details, setDetails] = useState<TokenDetails | null>(null);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     getBooking(bookingId).then(async (booking) => {
@@ -53,6 +58,21 @@ export function TokenScreen({ route, navigation }: Props) {
     Share.share({
       message: `KisanQ token ${booking.tokenNumber} — ${centre?.name ?? ""}, ${slot?.date ?? ""} ${slot?.startTime ?? ""}-${slot?.endTime ?? ""}`,
     }).catch(() => {});
+  };
+
+  const onCancelBooking = async () => {
+    setConfirmingCancel(false);
+    setCancelling(true);
+    setError(null);
+    try {
+      await cancelBooking(bookingId);
+      navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: "Home" }] }));
+    } catch (e) {
+      console.error(e);
+      setError(t("saveFailed"));
+    } finally {
+      setCancelling(false);
+    }
   };
 
   if (!details) {
@@ -82,6 +102,8 @@ export function TokenScreen({ route, navigation }: Props) {
         )}
       </View>
 
+      {error && <Text style={styles.error}>{error}</Text>}
+
       <View style={styles.spacer} />
       <PrimaryButton label={t("downloadShare")} onPress={onShare} variant="outline" />
       <View style={styles.spacerSmall} />
@@ -90,6 +112,28 @@ export function TokenScreen({ route, navigation }: Props) {
         onPress={() =>
           navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: "Home" }] }))
         }
+      />
+
+      {booking.status === "booked" && (
+        <>
+          <View style={styles.spacerSmall} />
+          <PrimaryButton
+            label={t("cancelBookingBtn")}
+            onPress={() => setConfirmingCancel(true)}
+            variant="danger"
+            loading={cancelling}
+          />
+        </>
+      )}
+
+      <ConfirmDialog
+        visible={confirmingCancel}
+        title={t("cancelConfirmTitle")}
+        confirmLabel={t("cancelConfirmYes")}
+        cancelLabel={t("cancelConfirmNo")}
+        destructive
+        onCancel={() => setConfirmingCancel(false)}
+        onConfirm={onCancelBooking}
       />
     </ScreenContainer>
   );
@@ -105,10 +149,12 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     alignItems: "center",
     gap: spacing.sm,
+    ...shadow.card,
   },
   token: { fontSize: fontSize.display, fontWeight: "800", color: colors.primary, letterSpacing: 1 },
   qrWrap: { marginVertical: spacing.lg, padding: spacing.md, backgroundColor: colors.white, borderRadius: radius.md },
   detail: { fontSize: fontSize.label, color: colors.text },
   spacer: { height: spacing.xl },
   spacerSmall: { height: spacing.sm },
+  error: { color: colors.error, textAlign: "center", marginTop: spacing.md },
 });

@@ -1,6 +1,6 @@
 import React from "react";
 import { Alert, Linking, Pressable, StyleSheet, Text } from "react-native";
-import { colors, radius, touchTarget } from "../theme";
+import { colors, radius, shadow, touchTarget } from "../theme";
 import { useLanguage } from "../context/LanguageContext";
 
 /**
@@ -20,7 +20,11 @@ export function HelpFab() {
   };
 
   return (
-    <Pressable accessibilityLabel={t("homeHelp")} onPress={onPress} style={styles.fab}>
+    <Pressable
+      accessibilityLabel={t("homeHelp")}
+      onPress={onPress}
+      style={({ pressed }) => [styles.fab, pressed && styles.pressed]}
+    >
       <Text style={styles.icon}>📞</Text>
     </Pressable>
   );
@@ -37,7 +41,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
     alignItems: "center",
     justifyContent: "center",
-    elevation: 3,
+    ...shadow.fab,
   },
   icon: { fontSize: 24 },
+  pressed: { opacity: 0.7 },
 });

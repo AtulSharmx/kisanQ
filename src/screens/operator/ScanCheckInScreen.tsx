@@ -11,7 +11,7 @@ import {
 import { CameraView, useCameraPermissions } from "expo-camera";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { OperatorStackParamList } from "../../navigation/operatorTypes";
-import { colors, fontSize, radius, spacing, touchTarget } from "../../theme";
+import { colors, fontSize, radius, shadow, spacing, touchTarget } from "../../theme";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { useOperator } from "../../context/OperatorContext";
 import {
@@ -111,10 +111,13 @@ export function ScanCheckInScreen({ navigation }: Props) {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>चेक-इन ({staffName})</Text>
         <View style={styles.headerActions}>
-          <Pressable onPress={() => navigation.navigate("LiveQueueManagement")}>
+          <Pressable
+            onPress={() => navigation.navigate("LiveQueueManagement")}
+            style={({ pressed }) => pressed && styles.pressed}
+          >
             <Text style={styles.headerLink}>लाइव कतार →</Text>
           </Pressable>
-          <Pressable onPress={logout}>
+          <Pressable onPress={logout} style={({ pressed }) => pressed && styles.pressed}>
             <Text style={styles.headerLink}>लॉग आउट</Text>
           </Pressable>
         </View>
@@ -237,9 +240,11 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.lg,
     gap: spacing.sm,
+    ...shadow.card,
   },
   row: { flexDirection: "row", justifyContent: "space-between" },
   rowLabel: { color: colors.textMuted },
   rowValue: { fontWeight: "700", color: colors.text, textTransform: "capitalize" },
   spacer: { height: spacing.sm },
+  pressed: { opacity: 0.7 },
 });

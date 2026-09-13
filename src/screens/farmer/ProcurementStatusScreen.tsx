@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
-import { colors, fontSize, radius, spacing } from "../../theme";
+import { colors, fontSize, radius, shadow, spacing } from "../../theme";
 import { useLanguage } from "../../context/LanguageContext";
 import { useFarmer } from "../../context/FarmerContext";
 import { ScreenContainer } from "../../components/ScreenContainer";
@@ -155,6 +155,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.lg,
     gap: spacing.md,
+    ...shadow.card,
   },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   checkbox: { fontSize: fontSize.header },

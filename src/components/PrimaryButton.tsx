@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   disabled: { opacity: 0.5 },
-  pressed: { opacity: 0.85 },
+  pressed: { opacity: 0.7 },
   label: {
     color: colors.white,
     fontSize: fontSize.label,

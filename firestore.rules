@@ -102,10 +102,12 @@ service cloud.firestore {
       allow update: if isAdmin()
         || isOperatorForCentre(resource.data.centreId)
         // A farmer booking a slot bumps its bookedCount by exactly 1 (createBooking()'s
-        // transaction) — this is the only slot write a farmer ever needs to make.
+        // transaction); cancelBooking() bumps it back down by exactly 1 — these are the only
+        // two slot writes a farmer ever needs to make.
         || (isSignedIn()
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["bookedCount"])
-            && request.resource.data.bookedCount == resource.data.bookedCount + 1);
+            && (request.resource.data.bookedCount == resource.data.bookedCount + 1
+                || request.resource.data.bookedCount == resource.data.bookedCount - 1));
     }
 
     match /tokenCounters/{counterId} {
@@ -127,7 +129,16 @@ service cloud.firestore {
       // collection (by farmerId and by centreId+tokenNumber respectively).
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.auth.uid == request.resource.data.farmerId;
-      allow update: if isAdmin() || isOperatorForCentre(resource.data.centreId);
+      allow update: if isAdmin()
+        || isOperatorForCentre(resource.data.centreId)
+        // cancelBooking(): a farmer may cancel only their own booking, only while it's still
+        // "booked" (not yet checked in — an operator has to handle anything past that point),
+        // and only by flipping status to "cancelled" — nothing else about the booking.
+        || (isSignedIn()
+            && request.auth.uid == resource.data.farmerId
+            && resource.data.status == "booked"
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status"])
+            && request.resource.data.status == "cancelled");
     }
 
     match /queue/{queueId} {
@@ -166,9 +177,22 @@ service cloud.firestore {
     }
 
     match /staff/{staffId} {
-      // Read is open to any signed-in device so the login screen and staffSessions checks
-      // above can look a staff record up by id; only an admin can create/edit staff accounts.
-      allow read: if isSignedIn();
+      // get (not list): open to any signed-in device, since the login screen
+      // (OperatorContext.tsx's getDoc-by-staffId) and claimedMatchesRealStaff()'s internal
+      // get() above both need to look up a single staff record by id *before* any staffSession
+      // exists — there's no way to scope this to "only staff" without breaking login itself.
+      // list is a different story: nothing in the app ever queries the whole staff collection,
+      // only single-document get()s by a known/guessed staffId — so restricting list to admin
+      // closes off a real gap (any signed-in farmer's phone could otherwise run one
+      // getDocs(collection(db,'staff')) and dump every operator's pinHash across every centre
+      // in a single call). This doesn't fully close the door — a client that already
+      // knows/guesses one staffId can still get() that one doc — but it removes the
+      // whole-directory harvesting risk, which get()-based role checks can't do for isAdmin()
+      // either (see the get()-in-list-queries note above): isAdmin() itself needs isSignedIn(),
+      // so admin's own list access here relies on the staffSessions/staff doc chain already
+      // being trusted, not on a stronger check being possible.
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
       allow write: if isAdmin();
     }
 

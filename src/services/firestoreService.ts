@@ -215,7 +215,11 @@ export async function createBooking(
     const centre = centreSnap.data() as Centre;
     const slot = slotSnap.data() as Slot;
     if (slot.bookedCount >= slot.capacity) {
-      throw new Error("This slot just filled up — please pick another.");
+      // "SLOT_FULL" is a stable error code, not user-facing text — SlotBookingScreen maps it to
+      // the translated slotJustFilled string rather than displaying this message directly, so
+      // this race-condition error (two farmers booking the last slot at once) doesn't show up
+      // in English inside an otherwise Hindi-default screen.
+      throw new Error("SLOT_FULL");
     }
 
     const nextSeq = (counterSnap.exists() ? (counterSnap.data().count as number) : 0) + 1;
@@ -242,6 +246,41 @@ export async function createBooking(
 
 export interface BookingWithId extends Booking {
   id: string;
+}
+
+/**
+ * Farmer-initiated cancel — UI/UX design principle 9 ("confirm before anything irreversible");
+ * the confirm step itself lives in the screen via ConfirmDialog. Only legal while the booking is
+ * still "booked" (not yet checked in) — once an operator has scanned the farmer in, cancelling
+ * their spot in a physical queue they're already standing in doesn't make sense, so this
+ * intentionally does not handle that case (matches the equivalent restriction firestore.rules
+ * enforces server-side, not just this check).
+ */
+export async function cancelBooking(bookingId: string): Promise<void> {
+  const bookingRef = doc(db, COLLECTIONS.bookings, bookingId);
+
+  await runTransaction(db, async (tx) => {
+    const bookingSnap = await tx.get(bookingRef);
+    if (!bookingSnap.exists()) throw new Error("Booking not found");
+    const booking = bookingSnap.data() as Booking;
+    if (booking.status !== "booked") {
+      throw new Error("Only a booking that hasn't been checked in yet can be cancelled.");
+    }
+
+    const slotRef = doc(db, COLLECTIONS.slots, booking.slotId);
+    const slotSnap = await tx.get(slotRef);
+    if (slotSnap.exists()) {
+      const slot = slotSnap.data() as Slot;
+      // Frees the slot back up for another farmer to book — mirrors createBooking()'s +1 with
+      // the opposite sign, same reasoning as the firestore.rules comment on slots.bookedCount.
+      // Not clamped to 0: a booking existing at all means createBooking() already incremented
+      // this same slot's bookedCount at least once, so it can never be 0 here — and the rule
+      // requires this write to be exactly resource.data.bookedCount - 1, not a clamped value.
+      tx.update(slotRef, { bookedCount: slot.bookedCount - 1 });
+    }
+
+    tx.update(bookingRef, { status: "cancelled" });
+  });
 }
 
 /** Most recent non-terminal booking for "My Token" / re-opening the token screen. */
@@ -589,12 +628,15 @@ export async function submitQualityCheck(input: QualityCheckInput): Promise<void
 
 // ---------------------------------------------------------------------------
 // Admin: overview + district->centre drill-down (Master Spec build order step 6)
-// "Mock data is acceptable here" per the Master Spec, so these are one-time reads (no
-// real-time listeners) over the full collections — fine at demo scale, not meant to scale to
-// a real deployment's data volume. `totalBookings`/`completedBookings` are all-time counts:
-// a booking doc doesn't carry its own date (only its linked slot does), so "today's bookings"
-// would need an extra join per booking — a reasonable simplification for a non-differentiator
-// screen, not an oversight.
+// Real-time via onSnapshot on each underlying collection, combined and recomputed on every
+// change — an admin watching this screen now sees a booking/check-in/completion land within
+// the same second it happens on the Operator side, instead of needing a manual page reload
+// (a stale-dashboard gap called out in review; the aggregation logic itself is unchanged from
+// the one-shot version this replaces). Still full, unfiltered collection reads — fine at demo
+// scale, not meant to scale to a real deployment's data volume. `totalBookings`/
+// `completedBookings` are all-time counts: a booking doc doesn't carry its own date (only its
+// linked slot does), so "today's bookings" would need an extra join per booking — a reasonable
+// simplification for a non-differentiator screen, not an oversight.
 // ---------------------------------------------------------------------------
 
 /** Centre is flagged "overloaded" above this booking-count-vs-dailyCapacity percentage. */
@@ -609,30 +651,60 @@ export interface AdminOverview {
   averageWaitMinutes: number;
 }
 
-export async function getAdminOverview(): Promise<AdminOverview> {
-  const [centresSnap, farmersSnap, bookingsSnap, queueSnap] = await Promise.all([
-    getDocs(collection(db, COLLECTIONS.centres)),
-    getDocs(collection(db, COLLECTIONS.farmers)),
-    getDocs(collection(db, COLLECTIONS.bookings)),
-    getDocs(collection(db, COLLECTIONS.queue)),
-  ]);
+/**
+ * Real-time Admin Overview — combines four independent onSnapshot listeners (centres, farmers,
+ * bookings, queue) and recomputes the aggregate on every change to any of them. Each listener
+ * fires immediately with its current data on subscribe, so onChange typically gets called a few
+ * times in quick succession as they each report in, converging on the correct numbers within a
+ * fraction of a second — simpler than gating the first call on all four being ready, and no
+ * worse than the one-shot version's own brief loading state.
+ */
+export function listenAdminOverview(
+  onChange: (overview: AdminOverview) => void
+): Unsubscribe {
+  let totalCentres = 0;
+  let totalFarmers = 0;
+  let bookings: Booking[] = [];
+  let queueEntries: QueueEntry[] = [];
 
-  const bookings = bookingsSnap.docs.map((d) => d.data() as Booking);
-  const waiting = queueSnap.docs
-    .map((d) => d.data() as QueueEntry)
-    .filter((q) => q.status === "waiting");
+  const recompute = () => {
+    const waiting = queueEntries.filter((q) => q.status === "waiting");
+    onChange({
+      totalCentres,
+      totalFarmers,
+      totalBookings: bookings.length,
+      completedBookings: bookings.filter((b) => b.status === "completed").length,
+      currentlyWaiting: waiting.length,
+      averageWaitMinutes: waiting.length
+        ? Math.round(
+            waiting.reduce((sum, q) => sum + q.estimatedWaitMinutes, 0) / waiting.length
+          )
+        : 0,
+    });
+  };
 
-  return {
-    totalCentres: centresSnap.size,
-    totalFarmers: farmersSnap.size,
-    totalBookings: bookings.length,
-    completedBookings: bookings.filter((b) => b.status === "completed").length,
-    currentlyWaiting: waiting.length,
-    averageWaitMinutes: waiting.length
-      ? Math.round(
-          waiting.reduce((sum, q) => sum + q.estimatedWaitMinutes, 0) / waiting.length
-        )
-      : 0,
+  const unsubCentres = onSnapshot(collection(db, COLLECTIONS.centres), (snap) => {
+    totalCentres = snap.size;
+    recompute();
+  });
+  const unsubFarmers = onSnapshot(collection(db, COLLECTIONS.farmers), (snap) => {
+    totalFarmers = snap.size;
+    recompute();
+  });
+  const unsubBookings = onSnapshot(collection(db, COLLECTIONS.bookings), (snap) => {
+    bookings = snap.docs.map((d) => d.data() as Booking);
+    recompute();
+  });
+  const unsubQueue = onSnapshot(collection(db, COLLECTIONS.queue), (snap) => {
+    queueEntries = snap.docs.map((d) => d.data() as QueueEntry);
+    recompute();
+  });
+
+  return () => {
+    unsubCentres();
+    unsubFarmers();
+    unsubBookings();
+    unsubQueue();
   };
 }
 
@@ -646,41 +718,64 @@ export interface CentreBreakdown {
   overloaded: boolean;
 }
 
-/** Per-centre stats for the District -> Centre drill-down table, grouped by district by the caller. */
-export async function getAdminCentreBreakdown(): Promise<CentreBreakdown[]> {
-  const [centresSnap, bookingsSnap, queueSnap] = await Promise.all([
-    getDocs(collection(db, COLLECTIONS.centres)),
-    getDocs(collection(db, COLLECTIONS.bookings)),
-    getDocs(collection(db, COLLECTIONS.queue)),
-  ]);
+/**
+ * Real-time per-centre stats for the District -> Centre drill-down table (grouped by district
+ * by the caller) — same combined-listener pattern as listenAdminOverview, over centres/
+ * bookings/queue.
+ */
+export function listenAdminCentreBreakdown(
+  onChange: (breakdown: CentreBreakdown[]) => void
+): Unsubscribe {
+  let centres: CentreWithId[] = [];
+  let bookings: Booking[] = [];
+  let queueEntries: QueueEntry[] = [];
 
-  const centres = centresSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Centre) }));
-  const bookings = bookingsSnap.docs.map((d) => d.data() as Booking);
-  const queueEntries = queueSnap.docs.map((d) => d.data() as QueueEntry);
+  const recompute = () => {
+    onChange(
+      centres.map((centre) => {
+        const centreBookings = bookings.filter((b) => b.centreId === centre.id);
+        const centreWaiting = queueEntries.filter(
+          (q) => q.centreId === centre.id && q.status === "waiting"
+        );
+        const utilizationPct =
+          centre.dailyCapacity > 0
+            ? Math.round((centreBookings.length / centre.dailyCapacity) * 100)
+            : 0;
 
-  return centres.map((centre) => {
-    const centreBookings = bookings.filter((b) => b.centreId === centre.id);
-    const centreWaiting = queueEntries.filter(
-      (q) => q.centreId === centre.id && q.status === "waiting"
+        return {
+          centre,
+          bookings: centreBookings.length,
+          completed: centreBookings.filter((b) => b.status === "completed").length,
+          waiting: centreWaiting.length,
+          averageWaitMinutes: centreWaiting.length
+            ? Math.round(
+                centreWaiting.reduce((sum, q) => sum + q.estimatedWaitMinutes, 0) /
+                  centreWaiting.length
+              )
+            : 0,
+          utilizationPct,
+          overloaded: utilizationPct > OVERLOAD_THRESHOLD_PCT,
+        };
+      })
     );
-    const utilizationPct =
-      centre.dailyCapacity > 0
-        ? Math.round((centreBookings.length / centre.dailyCapacity) * 100)
-        : 0;
+  };
 
-    return {
-      centre,
-      bookings: centreBookings.length,
-      completed: centreBookings.filter((b) => b.status === "completed").length,
-      waiting: centreWaiting.length,
-      averageWaitMinutes: centreWaiting.length
-        ? Math.round(
-            centreWaiting.reduce((sum, q) => sum + q.estimatedWaitMinutes, 0) /
-              centreWaiting.length
-          )
-        : 0,
-      utilizationPct,
-      overloaded: utilizationPct > OVERLOAD_THRESHOLD_PCT,
-    };
+  const unsubCentres = onSnapshot(collection(db, COLLECTIONS.centres), (snap) => {
+    centres = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Centre) }));
+    recompute();
   });
+  const unsubBookings = onSnapshot(collection(db, COLLECTIONS.bookings), (snap) => {
+    bookings = snap.docs.map((d) => d.data() as Booking);
+    recompute();
+  });
+  const unsubQueue = onSnapshot(collection(db, COLLECTIONS.queue), (snap) => {
+    queueEntries = snap.docs.map((d) => d.data() as QueueEntry);
+    recompute();
+  });
+
+  return () => {
+    unsubCentres();
+    unsubBookings();
+    unsubQueue();
+  };
 }

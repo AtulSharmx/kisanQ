@@ -50,7 +50,9 @@ export function ComingSoonScreen({ route, navigation }: Props) {
             <Text style={styles.cropIcon}>🌾</Text>
             <View>
               <Text style={styles.cropType}>{c.cropType}</Text>
-              <Text style={styles.cropQty}>{c.expectedQuantity} quintals (expected)</Text>
+              <Text style={styles.cropQty}>
+                {t("cropQtyExpected").replace("{n}", String(c.expectedQuantity))}
+              </Text>
             </View>
           </View>
         ))}

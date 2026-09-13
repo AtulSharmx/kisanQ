@@ -91,7 +91,7 @@ Uske baad farmer apni crop aur quantity daalta hai, nearby centres dekhta hai �
 
 "Yeh humara core innovation hai. Ek baar slot book ho jaye, farmer ko real-time queue status dikhta hai — kitne log aage hain, estimated wait time kya hai. Agar delay ho, toh updated wait time turant push ho jaata hai.
 
-Aur jab operator 'Call Next Farmer' dabata hai, farmer ke phone pe seedha notification jaata hai — 'Counter 3 pe pahunchiye.' Yeh exact wahi cheez hai jo hamne existing systems mein missing paayi thi."
+Aur jab operator 'Call Next Farmer' dabata hai, farmer ke phone pe seedha notification jaata hai — 'Counter pe pahunchiye, aapki baari aa gayi hai.' Yeh exact wahi cheez hai jo hamne existing systems mein missing paayi thi."
 
 ---
 

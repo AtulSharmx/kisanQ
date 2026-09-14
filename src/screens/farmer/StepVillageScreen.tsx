@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
@@ -6,29 +6,32 @@ import { colors, fontSize, radius, spacing } from "../../theme";
 import { useLanguage } from "../../context/LanguageContext";
 import { ScreenContainer } from "../../components/ScreenContainer";
 import { ProgressDots } from "../../components/ProgressDots";
+import { mockAadhaarLookup } from "../../services/mockAadhaar";
 
 type Props = NativeStackScreenProps<RootStackParamList, "StepVillage">;
 
-// Demo village list for the seeded Karnal/Panipat/Sonipat centres. A real build would source
-// this from a village master dataset — out of scope for this prototype.
-const VILLAGES = [
-  "Demo Village",
-  "Nissing",
-  "Assandh",
-  "Gharaunda",
-  "Indri",
-  "Samalkha",
-  "Israna",
-  "Gohana",
-  "Rai",
-];
+// Real villages/blocks within the three districts mockAadhaarLookup() can return (Karnal,
+// Panipat, Sonipat, Haryana — matching the seeded centres) — picked by the farmer's own
+// Aadhaar-derived district instead of one flat list shown to everyone regardless of district.
+const VILLAGES_BY_DISTRICT: Record<string, string[]> = {
+  Karnal: ["Nissing", "Assandh", "Gharaunda", "Indri", "Nilokheri", "Taraori", "Uchana", "Kunjpura"],
+  Panipat: ["Samalkha", "Israna", "Bapoli", "Naultha", "Sanauli", "Madlauda", "Ugra Kheri"],
+  Sonipat: ["Gohana", "Rai", "Kharkhoda", "Ganaur", "Julana", "Kathura", "Barota"],
+};
+const DEFAULT_VILLAGES = VILLAGES_BY_DISTRICT.Karnal;
 
 /** Additional Info, Step A: village — searchable list, not free text (UI/UX spec section 4). */
 export function StepVillageScreen({ route, navigation }: Props) {
   const { aadhaar } = route.params;
   const { t } = useLanguage();
   const [search, setSearch] = useState("");
-  const filtered = VILLAGES.filter((v) => v.toLowerCase().includes(search.toLowerCase()));
+
+  const villages = useMemo(() => {
+    const { district } = mockAadhaarLookup(aadhaar);
+    return VILLAGES_BY_DISTRICT[district] ?? DEFAULT_VILLAGES;
+  }, [aadhaar]);
+
+  const filtered = villages.filter((v) => v.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <ScreenContainer scroll={false} showHome={false}>

@@ -1,13 +1,23 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { OperatorStackParamList } from "../../navigation/operatorTypes";
-import { colors, fontSize, radius, spacing } from "../../theme";
+import { colors, fontSize, radius, spacing, touchTarget } from "../../theme";
 import { useOperator } from "../../context/OperatorContext";
 import {
+  increaseCentreCapacity,
   listenAdminCentreBreakdown,
   OVERLOAD_THRESHOLD_PCT,
   type CentreBreakdown,
+  type CentreWithId,
 } from "../../services/firestoreService";
 
 type Props = NativeStackScreenProps<OperatorStackParamList, "AdminDrilldown">;
@@ -68,17 +78,20 @@ export function AdminDrilldownScreen({ navigation }: Props) {
             <View key={district} style={styles.districtGroup}>
               <Text style={styles.districtLabel}>{district}</Text>
               {centres.map((row) => (
-                <View key={row.centre.id} style={styles.row}>
-                  <Text style={[styles.cell, styles.centreCol, styles.centreName]}>
-                    {row.centre.name}
-                  </Text>
-                  <Text style={styles.cell}>{row.bookings}</Text>
-                  <Text style={styles.cell}>{row.completed}</Text>
-                  <Text style={styles.cell}>{row.waiting}</Text>
-                  <Text style={styles.cell}>{row.averageWaitMinutes}m</Text>
-                  <Text style={[styles.cell, row.overloaded && styles.overloadedText]}>
-                    {row.utilizationPct}% {row.overloaded ? "⚠️" : ""}
-                  </Text>
+                <View key={row.centre.id} style={styles.centreBlock}>
+                  <View style={styles.row}>
+                    <Text style={[styles.cell, styles.centreCol, styles.centreName]}>
+                      {row.centre.name}
+                    </Text>
+                    <Text style={styles.cell}>{row.bookings}</Text>
+                    <Text style={styles.cell}>{row.completed}</Text>
+                    <Text style={styles.cell}>{row.waiting}</Text>
+                    <Text style={styles.cell}>{row.averageWaitMinutes}m</Text>
+                    <Text style={[styles.cell, row.overloaded && styles.overloadedText]}>
+                      {row.utilizationPct}% {row.overloaded ? "⚠️" : ""}
+                    </Text>
+                  </View>
+                  <CapacityRow centre={row.centre} />
                 </View>
               ))}
             </View>
@@ -89,6 +102,69 @@ export function AdminDrilldownScreen({ navigation }: Props) {
           </Text>
         </ScrollView>
       )}
+    </View>
+  );
+}
+
+/**
+ * Daily Buying Capacity — view + manual increase, per centre. View-only for the current number
+ * (an admin should see the true, possibly-negative value for real oversight — unlike the
+ * farmer-facing Centre Selection screen, this is deliberately not clamped to 0); the increase
+ * itself is the only capacity change this screen can make — an admin can't decrease it directly
+ * or edit any other centre field here, matching the "manual increase only" spec.
+ */
+function CapacityRow({ centre }: { centre: CentreWithId }) {
+  const [amountText, setAmountText] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const onIncrease = async () => {
+    const amount = Number(amountText);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError("Enter a positive number");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await increaseCentreCapacity(centre.id, amount);
+      setAmountText("");
+    } catch (e) {
+      console.error(e);
+      setError("Failed, try again");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <View style={styles.capacityRow}>
+      <Text style={styles.capacityText}>
+        Buying capacity: {centre.remainingCapacityQuintals} / {centre.dailyCapacityQuintals} qtl
+        remaining
+      </Text>
+      <View style={styles.capacityControls}>
+        <TextInput
+          value={amountText}
+          onChangeText={setAmountText}
+          keyboardType="numeric"
+          placeholder="+ qtl"
+          placeholderTextColor={colors.textMuted}
+          style={styles.capacityInput}
+        />
+        <Pressable
+          onPress={onIncrease}
+          disabled={saving}
+          style={({ pressed }) => [
+            styles.capacityBtn,
+            saving && styles.capacityBtnDisabled,
+            pressed && !saving && styles.pressed,
+          ]}
+        >
+          <Text style={styles.capacityBtnText}>{saving ? "..." : "Update"}</Text>
+        </Pressable>
+      </View>
+      {error && <Text style={styles.capacityError}>{error}</Text>}
     </View>
   );
 }
@@ -134,5 +210,38 @@ const styles = StyleSheet.create({
   centreName: { fontWeight: "700" },
   overloadedText: { color: colors.error, fontWeight: "700" },
   footnote: { marginTop: spacing.lg, color: colors.textMuted, fontSize: fontSize.body },
+  centreBlock: { borderBottomWidth: 1, borderBottomColor: colors.border },
+  capacityRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingBottom: spacing.sm,
+  },
+  capacityText: { flex: 1, minWidth: 200, color: colors.textMuted, fontSize: fontSize.body },
+  capacityControls: { flexDirection: "row", gap: spacing.sm },
+  capacityInput: {
+    width: 90,
+    minHeight: 40,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    fontSize: fontSize.body,
+    backgroundColor: colors.surface,
+    color: colors.text,
+  },
+  capacityBtn: {
+    minHeight: 40,
+    minWidth: touchTarget,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  capacityBtnDisabled: { opacity: 0.5 },
+  capacityBtnText: { color: colors.white, fontWeight: "700", fontSize: fontSize.body },
+  capacityError: { width: "100%", color: colors.error, fontSize: fontSize.body },
   pressed: { opacity: 0.7 },
 });

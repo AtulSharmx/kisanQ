@@ -93,7 +93,17 @@ service cloud.firestore {
 
     match /centres/{centreId} {
       allow read: if true; // centre list is needed pre-login for slot browsing
-      allow write: if isAdmin();
+      allow write: if isAdmin()
+        // Daily Buying Capacity feature: submitQualityCheck()'s Accept step decrements
+        // remainingCapacityQuintals by the accepted booking's actual weighed quantity, in the
+        // same transaction as the existing procurement/booking/queue writes — same idea as the
+        // slots.bookedCount pattern above, but since the decrement amount varies per booking
+        // (not a fixed ±1), this can only check that the write is same-centre-operator, touches
+        // nothing but this one field, and moves the number down, never up — raising it back is
+        // a separate, deliberate admin-only action (increaseCentreCapacity()).
+        || (isOperatorForCentre(centreId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["remainingCapacityQuintals"])
+            && request.resource.data.remainingCapacityQuintals < resource.data.remainingCapacityQuintals);
     }
 
     match /slots/{slotId} {
@@ -120,6 +130,13 @@ service cloud.firestore {
 
     match /queuePositionCounters/{counterId} {
       // Same pattern as tokenCounters, read+bumped inside the check-in transaction.
+      allow read, write: if isSignedIn();
+    }
+
+    match /expressSlotCounters/{counterId} {
+      // Same pattern as tokenCounters — enforcing the EXPRESS_QUOTA_PER_DAY cap happens in
+      // createBooking()'s transaction logic (read-then-conditionally-write), not in the rule
+      // itself; the rule only needs to let that read/write happen at all.
       allow read, write: if isSignedIn();
     }
 

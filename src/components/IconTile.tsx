@@ -1,5 +1,6 @@
 import React from "react";
-import { Pressable, StyleSheet, Text } from "react-native";
+import { StyleSheet, Text } from "react-native";
+import { AnimatedPressable } from "./AnimatedPressable";
 import { colors, fontSize, radius, spacing, touchTarget } from "../theme";
 
 interface Props {
@@ -11,13 +12,13 @@ interface Props {
 /** Large icon + one-word label tile — Home Dashboard grid (UI/UX spec section 5). */
 export function IconTile({ icon, label, onPress }: Props) {
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
       style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
     >
       <Text style={styles.icon}>{icon}</Text>
       <Text style={styles.label}>{label}</Text>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 

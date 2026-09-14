@@ -1,6 +1,6 @@
 import React from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { createNativeStackNavigator, type NativeStackNavigationOptions } from "@react-navigation/native-stack";
 import type { OperatorStackParamList } from "./operatorTypes";
 import { useOperator } from "../context/OperatorContext";
 import { StaffLoginScreen } from "../screens/operator/StaffLoginScreen";
@@ -13,6 +13,14 @@ import { AdminDrilldownScreen } from "../screens/admin/AdminDrilldownScreen";
 import { colors } from "../theme";
 
 const Stack = createNativeStackNavigator<OperatorStackParamList>();
+
+// Same off-white contentStyle as the Farmer app's navigator, so the web build's screen
+// transitions don't flash the platform default white between screens either.
+const screenOptions: NativeStackNavigationOptions = {
+  headerShown: false,
+  animation: "slide_from_right",
+  contentStyle: { backgroundColor: colors.background },
+};
 
 export function OperatorNavigator() {
   const { session, initializing } = useOperator();
@@ -30,7 +38,7 @@ export function OperatorNavigator() {
   // just sitting on whatever screen was last open.
   if (!session) {
     return (
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator screenOptions={screenOptions}>
         <Stack.Screen name="StaffLogin" component={StaffLoginScreen} />
       </Stack.Navigator>
     );
@@ -38,7 +46,7 @@ export function OperatorNavigator() {
 
   if (session.role === "admin") {
     return (
-      <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="AdminOverview">
+      <Stack.Navigator screenOptions={screenOptions} initialRouteName="AdminOverview">
         <Stack.Screen name="AdminOverview" component={AdminOverviewScreen} />
         <Stack.Screen name="AdminDrilldown" component={AdminDrilldownScreen} />
       </Stack.Navigator>
@@ -46,7 +54,7 @@ export function OperatorNavigator() {
   }
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="ScanCheckIn">
+    <Stack.Navigator screenOptions={screenOptions} initialRouteName="ScanCheckIn">
       <Stack.Screen name="ScanCheckIn" component={ScanCheckInScreen} />
       <Stack.Screen name="LiveQueueManagement" component={LiveQueueManagementScreen} />
       <Stack.Screen name="Weighing" component={WeighingScreen} />

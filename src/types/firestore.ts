@@ -46,6 +46,19 @@ export type CentreStatus = "active" | "inactive";
  * `code` is not listed in the Master Spec's field list but is required to build the documented
  * token format `[Centre code]-[4-digit sequential number]` (KisanQ_Missing_Details_Polish.md
  * section 4) — added here for that reason.
+ *
+ * `dailyCapacity` (existing field) is a *booking-count* ceiling used only for the Admin
+ * Drilldown's utilization %/overloaded flag — unrelated to `dailyCapacityQuintals` /
+ * `remainingCapacityQuintals`, which track the centre's real-world daily buying-capacity limit
+ * in quintals (the unit used everywhere else in the app, not tons). `remainingCapacityQuintals`
+ * is decremented automatically, in the same transaction as the existing accept logic, by
+ * submitQualityCheck() whenever a booking is Accepted (by that booking's actual weighed
+ * quantity) — never by a manual per-farmer update, which wouldn't hold up at real volume. It's
+ * only ever increased by an admin's deliberate action (increaseCentreCapacity()) — a real
+ * policy decision (head office authorizing more purchase for the day), not something automatic.
+ * There's no automatic day-rollover reset of this number in this prototype, matching how
+ * `slots.bookedCount` also isn't auto-reset daily — it's admin-managed via scripts/seed.ts and
+ * scripts/reset.ts, same as every other "today"-scoped demo number in this project.
  */
 export interface Centre {
   name: string;
@@ -53,6 +66,8 @@ export interface Centre {
   district: string;
   location: GeoPoint;
   dailyCapacity: number;
+  dailyCapacityQuintals: number;
+  remainingCapacityQuintals: number;
   status: CentreStatus;
 }
 
@@ -90,6 +105,14 @@ export interface Booking {
   tokenNumber: string;
   status: BookingStatus;
   checkedInByStaffId?: string;
+  /**
+   * Express (Tatkal-style) priority booking — a fixed, transparent, capped-quota official fee
+   * (never a live bid/auction — see EXPRESS_PRICES/EXPRESS_QUOTA_PER_DAY in firestoreService.ts)
+   * to be processed ahead of the regular queue. `expressFeePaid` is simulated, like every other
+   * payment in this app (CLAUDE.md rule 6) — no real money moves.
+   */
+  isExpress?: boolean;
+  expressFeePaid?: number;
 }
 
 export type QueueStatus = "waiting" | "processing" | "completed";
@@ -105,6 +128,8 @@ export interface QueueEntry {
   position: number;
   status: QueueStatus;
   estimatedWaitMinutes: number;
+  /** Copied from Booking.isExpress at check-in time — see queueSortKey() in firestoreService.ts. */
+  isExpress?: boolean;
 }
 
 export type QualityStatus = "pending" | "accepted" | "rejected";
@@ -194,6 +219,17 @@ export interface QueuePositionCounter {
 }
 
 /**
+ * expressSlotCounters/{centreId_date}
+ * Same one-doc-per-centre-per-day counter pattern as tokenCounters/queuePositionCounters —
+ * tracks how many of the fixed EXPRESS_QUOTA_PER_DAY Tatkal-style slots have been sold for a
+ * centre on a given date, so createBooking()'s transaction can atomically enforce the cap
+ * (see firestoreService.ts EXPRESS_PRICES / EXPRESS_QUOTA_PER_DAY).
+ */
+export interface ExpressSlotCounter {
+  count: number;
+}
+
+/**
  * staffSessions/{authUid}
  * Not in the Master Spec's collection list. The mocked Staff ID + PIN login never mints a real
  * auth token, but firestore.rules still need *some* real request.auth to scope operator/admin
@@ -225,6 +261,7 @@ export const COLLECTIONS = {
   notifications: "notifications",
   tokenCounters: "tokenCounters",
   queuePositionCounters: "queuePositionCounters",
+  expressSlotCounters: "expressSlotCounters",
   staff: "staff",
   staffSessions: "staffSessions",
 } as const;

@@ -37,6 +37,47 @@ import type {
 /** Average processing time per farmer, for wait estimates — see Missing Details Polish sec. 6. */
 export const AVERAGE_PROCESSING_MINUTES = 8;
 
+/**
+ * Express (Tatkal-style) priority booking — a fixed, transparent, officially-priced, CAPPED
+ * quota, not a live auction. Modelled on IRCTC/Passport Seva Tatkal: a small fixed number of
+ * slots at a fixed (escalating-per-slot) price, and once they're gone nobody can buy their way
+ * in no matter how much they'd pay — the cap is what stops it from turning into "everyone just
+ * pays a bit more than the last person," which is the real fairness risk with an open-ended
+ * pay-to-skip model. Deliberately small numbers: this is a demonstration of the *mechanism*,
+ * not a revenue feature, and the price is a symbolic official fee, not a market price.
+ */
+export const EXPRESS_QUOTA_PER_DAY = 2;
+export const EXPRESS_PRICES = [20, 40]; // ₹, one entry per rank (1st slot cheaper than 2nd)
+
+/** Sort key for combined queue ordering: all Express entries before all regular entries,
+ * ordered by arrival (position) within each group. Used everywhere "who's ahead of whom" is
+ * computed, instead of comparing raw `position` — Express deliberately does not touch or
+ * renumber anyone else's position, it only changes how the existing positions are compared. */
+export function queueSortKey(e: { isExpress?: boolean; position: number }): [number, number] {
+  return [e.isExpress ? 0 : 1, e.position];
+}
+
+function compareQueueSortKey(a: [number, number], b: [number, number]): number {
+  return a[0] - b[0] || a[1] - b[1];
+}
+
+/** Comparator for Array.sort() — Express entries first, then by position — used by the
+ * Operator's Live Queue Management screen so its display order matches what farmers actually
+ * see reflected in isAheadInQueue()/queueSortKey() below. */
+export function compareQueueEntries(
+  a: { isExpress?: boolean; position: number },
+  b: { isExpress?: boolean; position: number }
+): number {
+  return compareQueueSortKey(queueSortKey(a), queueSortKey(b));
+}
+
+export function isAheadInQueue(
+  candidate: { isExpress?: boolean; position: number },
+  of: { isExpress?: boolean; position: number }
+): boolean {
+  return compareQueueSortKey(queueSortKey(candidate), queueSortKey(of)) < 0;
+}
+
 export interface RegisterFarmerInput {
   farmerId: string; // the signed-in Firebase Auth uid — see src/lib/firebase.ts
   name: string;
@@ -159,16 +200,32 @@ export interface SlotWithId extends Slot {
   id: string;
 }
 
-export async function listSlotsForCentreToday(centreId: string): Promise<SlotWithId[]> {
-  const today = new Date().toISOString().slice(0, 10);
+/** ISO date strings for today/tomorrow/day-after — advance booking is capped at 3 days out
+ * since the daily capacity model (and the demo seed data) only plans that far ahead. */
+export function advanceBookingDates(): string[] {
+  return [0, 1, 2].map((offset) => {
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    return d.toISOString().slice(0, 10);
+  });
+}
+
+export async function listSlotsForCentreOnDate(
+  centreId: string,
+  date: string
+): Promise<SlotWithId[]> {
   const q = query(
     collection(db, COLLECTIONS.slots),
     where("centreId", "==", centreId),
-    where("date", "==", today),
+    where("date", "==", date),
     orderBy("startTime", "asc")
   );
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Slot) }));
+}
+
+export async function listSlotsForCentreToday(centreId: string): Promise<SlotWithId[]> {
+  return listSlotsForCentreOnDate(centreId, advanceBookingDates()[0]);
 }
 
 export async function hasAvailableSlotToday(centreId: string): Promise<boolean> {
@@ -176,44 +233,75 @@ export async function hasAvailableSlotToday(centreId: string): Promise<boolean> 
   return slots.some((s) => s.bookedCount < s.capacity);
 }
 
+/** Express availability for a centre on a given date — see EXPRESS_QUOTA_PER_DAY above. */
+export async function getExpressAvailability(
+  centreId: string,
+  date: string
+): Promise<{ available: boolean; nextRank: number; price: number }> {
+  const snap = await getDoc(doc(db, COLLECTIONS.expressSlotCounters, `${centreId}_${date}`));
+  const count = snap.exists() ? (snap.data().count as number) : 0;
+  return {
+    available: count < EXPRESS_QUOTA_PER_DAY,
+    nextRank: count + 1,
+    price: EXPRESS_PRICES[count] ?? EXPRESS_PRICES[EXPRESS_PRICES.length - 1],
+  };
+}
+
 export interface CreateBookingInput {
   farmerId: string;
   centreId: string;
   slotId: string;
   cropId: string;
+  /** Opt into an Express (Tatkal-style) slot, if one of the EXPRESS_QUOTA_PER_DAY is still
+   * available for this slot's date — see getExpressAvailability(). */
+  wantsExpress?: boolean;
 }
 
 export interface CreateBookingResult {
   bookingId: string;
   tokenNumber: string;
+  isExpress: boolean;
+  expressFeePaid?: number;
 }
 
 /**
  * Atomically: bumps the slot's bookedCount, allocates the next daily sequential token number
  * for the centre (format `[Centre code]-[4-digit sequential]`, resets daily — Missing Details
- * Polish sec. 4), and creates the bookings/{id} doc with status "booked".
+ * Polish sec. 4), optionally claims one of the day's capped Express slots, and creates the
+ * bookings/{id} doc with status "booked".
+ *
+ * The token/Express counters are keyed by the *slot's own* date, not the date this function
+ * happens to run on — advance booking (booking a future day's slot) means those can differ, and
+ * getting this wrong would silently mix today's token sequence with a future day's.
  */
 export async function createBooking(
   input: CreateBookingInput
 ): Promise<CreateBookingResult> {
-  const today = new Date().toISOString().slice(0, 10);
   const centreRef = doc(db, COLLECTIONS.centres, input.centreId);
   const slotRef = doc(db, COLLECTIONS.slots, input.slotId);
-  const counterRef = doc(db, COLLECTIONS.tokenCounters, `${input.centreId}_${today}`);
   const bookingRef = doc(collection(db, COLLECTIONS.bookings));
+  const today = new Date().toISOString().slice(0, 10);
 
-  const tokenNumber = await runTransaction(db, async (tx) => {
-    const [centreSnap, slotSnap, counterSnap] = await Promise.all([
-      tx.get(centreRef),
-      tx.get(slotRef),
-      tx.get(counterRef),
-    ]);
+  const result = await runTransaction(db, async (tx) => {
+    const [centreSnap, slotSnap] = await Promise.all([tx.get(centreRef), tx.get(slotRef)]);
 
     if (!centreSnap.exists()) throw new Error("Centre not found");
     if (!slotSnap.exists()) throw new Error("Slot not found");
 
     const centre = centreSnap.data() as Centre;
     const slot = slotSnap.data() as Slot;
+
+    // Daily buying-capacity gate — only for *today's* date (this centre's
+    // remainingCapacityQuintals has no separate tracking for future days, so advance bookings
+    // for tomorrow/day-after are never blocked by it). Only gates *new* bookings; an
+    // already-confirmed booking that's mid-queue when capacity runs out is deliberately left
+    // alone — see the CENTRE_CAPACITY_FULL handling in SlotBookingScreen.
+    if (slot.date === today && centre.remainingCapacityQuintals <= 0) {
+      // Stable error code, same pattern as SLOT_FULL/EXPRESS_SOLD_OUT below — the screen maps
+      // this to a translated message rather than showing raw English.
+      throw new Error("CENTRE_CAPACITY_FULL");
+    }
+
     if (slot.bookedCount >= slot.capacity) {
       // "SLOT_FULL" is a stable error code, not user-facing text — SlotBookingScreen maps it to
       // the translated slotJustFilled string rather than displaying this message directly, so
@@ -222,11 +310,41 @@ export async function createBooking(
       throw new Error("SLOT_FULL");
     }
 
+    const counterRef = doc(db, COLLECTIONS.tokenCounters, `${input.centreId}_${slot.date}`);
+    const counterSnap = await tx.get(counterRef);
     const nextSeq = (counterSnap.exists() ? (counterSnap.data().count as number) : 0) + 1;
     const token = `${centre.code}-${String(nextSeq).padStart(4, "0")}`;
 
+    // Express eligibility is read here (alongside the other reads) but only *written* below,
+    // once every read this transaction needs has happened — Firestore transactions require all
+    // reads before any writes.
+    let expressCounterRef: ReturnType<typeof doc> | undefined;
+    let expressCount = 0;
+    if (input.wantsExpress) {
+      expressCounterRef = doc(
+        db,
+        COLLECTIONS.expressSlotCounters,
+        `${input.centreId}_${slot.date}`
+      );
+      const expressSnap = await tx.get(expressCounterRef);
+      expressCount = expressSnap.exists() ? (expressSnap.data().count as number) : 0;
+      if (expressCount >= EXPRESS_QUOTA_PER_DAY) {
+        // Stable error code, same pattern as SLOT_FULL — the screen maps this to a translated
+        // "sold out" message rather than showing raw English.
+        throw new Error("EXPRESS_SOLD_OUT");
+      }
+    }
+
     tx.set(counterRef, { count: nextSeq });
     tx.update(slotRef, { bookedCount: slot.bookedCount + 1 });
+
+    let isExpress = false;
+    let expressFeePaid: number | undefined;
+    if (expressCounterRef) {
+      tx.set(expressCounterRef, { count: expressCount + 1 });
+      isExpress = true;
+      expressFeePaid = EXPRESS_PRICES[expressCount] ?? EXPRESS_PRICES[EXPRESS_PRICES.length - 1];
+    }
 
     const booking: Booking = {
       farmerId: input.farmerId,
@@ -235,13 +353,19 @@ export async function createBooking(
       cropId: input.cropId,
       tokenNumber: token,
       status: "booked",
+      ...(isExpress ? { isExpress, expressFeePaid } : {}),
     };
     tx.set(bookingRef, booking);
 
-    return token;
+    return { token, isExpress, expressFeePaid };
   });
 
-  return { bookingId: bookingRef.id, tokenNumber };
+  return {
+    bookingId: bookingRef.id,
+    tokenNumber: result.token,
+    isExpress: result.isExpress,
+    expressFeePaid: result.expressFeePaid,
+  };
 }
 
 export interface BookingWithId extends Booking {
@@ -374,6 +498,7 @@ export async function checkInBooking(input: {
       position: nextPosition,
       status: "waiting",
       estimatedWaitMinutes: (nextPosition - 1) * AVERAGE_PROCESSING_MINUTES,
+      ...(booking.isExpress ? { isExpress: true } : {}),
     };
     tx.set(queueRef, queueEntry);
 
@@ -609,6 +734,10 @@ export interface QualityCheckInput {
   grade: string;
   decision: "accept" | "reject";
   rejectionReason?: string;
+  /** Needed to decrement the booking's centre's remainingCapacityQuintals on Accept — already
+   * known to the screen from the earlier Weighing step, so no extra document read is needed to
+   * get it. */
+  actualWeight: number;
 }
 
 /**
@@ -617,6 +746,14 @@ export interface QualityCheckInput {
  * set to "rejected" and the farmer keeps their produce with no payment obligation, per Missing
  * Details Polish sec. 8. Either outcome closes out the booking/queue entry — the farmer's turn
  * at the centre is over regardless of the quality outcome.
+ *
+ * On Accept only, this also decrements the booking's centre's remainingCapacityQuintals by the
+ * actual weighed quantity, in the same transaction — the Daily Buying Capacity feature's core
+ * write. A reject doesn't touch capacity at all (nothing was bought). Not clamped at 0: the
+ * last farmer of the day can legitimately push the number slightly negative (their produce was
+ * already weighed and is being bought regardless) — the feature's actual constraint is on *new*
+ * bookings (see createBooking()'s CENTRE_CAPACITY_FULL check), not on a farmer already this far
+ * into the process.
  */
 export async function submitQualityCheck(input: QualityCheckInput): Promise<void> {
   const procurementRef = doc(db, COLLECTIONS.procurement, input.procurementId);
@@ -626,6 +763,19 @@ export async function submitQualityCheck(input: QualityCheckInput): Promise<void
   const accepted = input.decision === "accept";
 
   await runTransaction(db, async (tx) => {
+    // All reads (across every branch) must happen before any writes below, per Firestore
+    // transaction rules — so the centre lookup, gated on `accepted`, has to run first.
+    let centreRef: ReturnType<typeof doc> | undefined;
+    let centre: Centre | undefined;
+    if (accepted) {
+      const bookingSnap = await tx.get(bookingRef);
+      if (!bookingSnap.exists()) throw new Error("Booking not found");
+      const booking = bookingSnap.data() as Booking;
+      centreRef = doc(db, COLLECTIONS.centres, booking.centreId);
+      const centreSnap = await tx.get(centreRef);
+      if (centreSnap.exists()) centre = centreSnap.data() as Centre;
+    }
+
     tx.update(procurementRef, {
       moisturePct: input.moisturePct,
       grade: input.grade,
@@ -635,6 +785,12 @@ export async function submitQualityCheck(input: QualityCheckInput): Promise<void
     });
     tx.update(bookingRef, { status: "completed" });
     tx.update(queueRef, { status: "completed" });
+
+    if (centreRef && centre) {
+      tx.update(centreRef, {
+        remainingCapacityQuintals: centre.remainingCapacityQuintals - input.actualWeight,
+      });
+    }
 
     const notification: AppNotification = {
       farmerId: input.farmerId,
@@ -649,6 +805,46 @@ export async function submitQualityCheck(input: QualityCheckInput): Promise<void
       createdAt: serverTimestamp() as unknown as AppNotification["createdAt"],
     };
     tx.set(notificationRef, notification);
+  });
+}
+
+/**
+ * Admin-only manual increase to a centre's remainingCapacityQuintals — e.g. head office
+ * authorizing more purchase for the day. Deliberately kept separate from the Accept-triggered
+ * decrement in submitQualityCheck(): per the feature spec, this stays a manual, deliberate
+ * action, never automatic. No broadcast notification on increase (see SlotBookingScreen/
+ * CentreSelectionScreen instead) — the live listener on centres/ already used elsewhere in this
+ * file is enough for a farmer checking the Centre Selection screen to see the new number.
+ */
+export async function increaseCentreCapacity(centreId: string, byQuintals: number): Promise<void> {
+  const centreRef = doc(db, COLLECTIONS.centres, centreId);
+  await runTransaction(db, async (tx) => {
+    const centreSnap = await tx.get(centreRef);
+    if (!centreSnap.exists()) throw new Error("Centre not found");
+    const centre = centreSnap.data() as Centre;
+    tx.update(centreRef, {
+      remainingCapacityQuintals: centre.remainingCapacityQuintals + byQuintals,
+    });
+  });
+}
+
+/**
+ * Live remainingCapacityQuintals per active centre, for the Centre Selection screen — same
+ * onSnapshot-on-a-collection pattern as listenQueueForCentre()/listenAdminOverview() elsewhere
+ * in this file, scoped to just this one field so a capacity change (from an Accept or an
+ * admin's manual increase) shows up on the screen without the farmer needing to reload, while
+ * leaving the rest of that screen's one-time distance/wait/hasSlots computation untouched.
+ */
+export function listenActiveCentresCapacity(
+  onChange: (remainingByCentreId: Record<string, number>) => void
+): Unsubscribe {
+  const q = query(collection(db, COLLECTIONS.centres), where("status", "==", "active"));
+  return onSnapshot(q, (snap) => {
+    const remainingByCentreId: Record<string, number> = {};
+    snap.docs.forEach((d) => {
+      remainingByCentreId[d.id] = (d.data() as Centre).remainingCapacityQuintals;
+    });
+    onChange(remainingByCentreId);
   });
 }
 

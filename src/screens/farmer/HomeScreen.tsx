@@ -67,6 +67,11 @@ export function HomeScreen({ navigation }: Props) {
           label={t("homeNotifications")}
           onPress={() => navigation.navigate("Notifications")}
         />
+        <IconTile
+          icon="⚙️"
+          label={t("homeSettings")}
+          onPress={() => navigation.navigate("Settings")}
+        />
       </View>
 
       {checkingToken && <ActivityIndicator style={styles.loader} color={colors.primary} />}

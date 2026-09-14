@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { onAuthStateChanged, signInAnonymously } from "firebase/auth";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { onAuthStateChanged, signInAnonymously, signOut } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import { getFarmer } from "../services/firestoreService";
 import type { Farmer } from "../types/firestore";
@@ -13,6 +13,14 @@ interface FarmerContextValue {
   initializing: boolean;
   /** Call after registerFarmer() succeeds so the rest of the app sees the profile immediately. */
   setFarmer: (farmer: Farmer) => void;
+  /**
+   * Signs out of the current anonymous session (Missing Details Polish sec. 5: "mobile+OTP is
+   * only needed again after an explicit logout"). onAuthStateChanged's existing `if (!user)`
+   * branch immediately starts a *new* anonymous session, so the next registration gets a fresh
+   * uid/farmerId — clearing farmer/farmerId here right away (rather than waiting on that round
+   * trip) avoids a flash of the old farmer's data before it resolves.
+   */
+  logout: () => Promise<void>;
 }
 
 const FarmerContext = createContext<FarmerContextValue | null>(null);
@@ -40,9 +48,15 @@ export function FarmerProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe;
   }, []);
 
+  const logout = useCallback(async () => {
+    await signOut(auth);
+    setFarmerId(null);
+    setFarmerState(null);
+  }, []);
+
   const value = useMemo(
-    () => ({ farmerId, farmer, initializing, setFarmer: setFarmerState }),
-    [farmerId, farmer, initializing]
+    () => ({ farmerId, farmer, initializing, setFarmer: setFarmerState, logout }),
+    [farmerId, farmer, initializing, logout]
   );
 
   return <FarmerContext.Provider value={value}>{children}</FarmerContext.Provider>;

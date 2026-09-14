@@ -1,6 +1,7 @@
 import React from "react";
-import { Pressable, StyleSheet, Text } from "react-native";
+import { StyleSheet, Text } from "react-native";
 import { CommonActions, useNavigation } from "@react-navigation/native";
+import { AnimatedPressable } from "./AnimatedPressable";
 import { colors, radius, shadow, touchTarget } from "../theme";
 
 /** Persistent top-left home icon — always returns to the dashboard (UI/UX spec). */
@@ -8,7 +9,7 @@ export function HomeFab() {
   const navigation = useNavigation();
 
   return (
-    <Pressable
+    <AnimatedPressable
       accessibilityLabel="Home"
       onPress={() =>
         navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: "Home" }] }))
@@ -16,7 +17,7 @@ export function HomeFab() {
       style={({ pressed }) => [styles.fab, pressed && styles.pressed]}
     >
       <Text style={styles.icon}>🏠</Text>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 

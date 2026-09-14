@@ -11,6 +11,7 @@ import {
   getCentreEstimatedWaitMinutes,
   hasAvailableSlotToday,
   listActiveCentres,
+  listenActiveCentresCapacity,
   type CentreWithId,
 } from "../../services/firestoreService";
 import { pseudoDistanceKm } from "../../utils/pseudoDistance";
@@ -66,6 +67,31 @@ export function CentreSelectionScreen({ route, navigation }: Props) {
     });
   }, [farmerId]);
 
+  // Live remainingCapacityQuintals — this is the one piece of this screen's data that a farmer
+  // benefits from seeing update without reloading (an Accept elsewhere, or an admin's manual
+  // increase, both land here within the same second). Merged into the already-ranked list
+  // rather than recomputing distance/wait/hasSlots, which don't change live.
+  useEffect(() => {
+    const unsubscribe = listenActiveCentresCapacity((remainingByCentreId) => {
+      setRanked((prev) =>
+        prev
+          ? prev.map((r) =>
+              r.centre.id in remainingByCentreId
+                ? {
+                    ...r,
+                    centre: {
+                      ...r.centre,
+                      remainingCapacityQuintals: remainingByCentreId[r.centre.id],
+                    },
+                  }
+                : r
+            )
+          : prev
+      );
+    });
+    return unsubscribe;
+  }, []);
+
   if (!ranked) {
     return (
       <ScreenContainer>
@@ -103,6 +129,12 @@ export function CentreSelectionScreen({ route, navigation }: Props) {
             <Text style={item.hasSlots ? styles.slotsOk : styles.slotsFull}>
               {item.hasSlots ? t("slotsAvailable") : t("slotsFull")}
             </Text>
+            <Text style={styles.capacity}>
+              {t("remainingCapacityLabel").replace(
+                "{n}",
+                String(Math.max(0, item.centre.remainingCapacityQuintals))
+              )}
+            </Text>
           </Pressable>
         )}
       />
@@ -129,5 +161,6 @@ const styles = StyleSheet.create({
   meta: { fontSize: fontSize.body, color: colors.textMuted },
   slotsOk: { color: colors.primary, fontWeight: "700" },
   slotsFull: { color: colors.error, fontWeight: "700" },
+  capacity: { fontSize: fontSize.body, color: colors.textMuted },
   pressed: { opacity: 0.7 },
 });

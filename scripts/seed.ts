@@ -47,6 +47,11 @@ const today = new Date().toISOString().slice(0, 10);
 
 async function seed() {
   console.log("Seeding centres...");
+  // dailyCapacityQuintals/remainingCapacityQuintals: the real-world daily buying-capacity limit
+  // (Daily Buying Capacity feature) — a separate number from dailyCapacity above (which is a
+  // booking-count ceiling for the Admin Drilldown's utilization %). remainingCapacityQuintals
+  // starts equal to dailyCapacityQuintals (nothing bought yet today); submitQualityCheck()'s
+  // Accept step decrements it live, an admin can manually increase it.
   const centres = [
     {
       id: "centre-ksn",
@@ -54,6 +59,8 @@ async function seed() {
       district: "Karnal",
       location: { lat: 29.6857, lng: 76.9905 },
       dailyCapacity: 150,
+      dailyCapacityQuintals: 500,
+      remainingCapacityQuintals: 500,
       status: "active" as const,
       code: "KSN",
     },
@@ -63,6 +70,8 @@ async function seed() {
       district: "Panipat",
       location: { lat: 29.3909, lng: 76.9635 },
       dailyCapacity: 120,
+      dailyCapacityQuintals: 400,
+      remainingCapacityQuintals: 400,
       status: "active" as const,
       code: "PNP",
     },
@@ -72,6 +81,8 @@ async function seed() {
       district: "Sonipat",
       location: { lat: 28.9931, lng: 77.0151 },
       dailyCapacity: 100,
+      dailyCapacityQuintals: 300,
+      remainingCapacityQuintals: 300,
       status: "active" as const,
       code: "SNP",
     },
@@ -84,30 +95,45 @@ async function seed() {
       .set({ ...centre, location: new GeoPoint(location.lat, location.lng) });
   }
 
-  console.log("Seeding slots for today...");
+  console.log("Seeding slots for today, tomorrow, and the day after (advance booking demo)...");
   const slotDefs = [
     { start: "09:00", end: "10:00", capacity: 20, booked: 20 }, // full
     { start: "10:00", end: "11:00", capacity: 20, booked: 14 },
     { start: "11:00", end: "12:00", capacity: 20, booked: 6 },
     { start: "14:00", end: "15:00", capacity: 20, booked: 0 }, // fully available
   ];
+  // Same 4 time slots, 3 days out — SlotBookingScreen's Aaj/Kal/Parso date tabs need real data
+  // for all three, not just today. Offset 0 keeps today's original slot IDs (`{centre}-slot-{i}`)
+  // for backward compatibility with scripts/reset.ts; tomorrow/day-after get a `-d{offset}`
+  // suffix so all three days' docs coexist without colliding.
+  const dateForOffset = (offset: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    return d.toISOString().slice(0, 10);
+  };
   const slotIds: Record<string, string[]> = {};
   for (const centre of centres) {
     slotIds[centre.id] = [];
-    for (const [i, s] of slotDefs.entries()) {
-      const slotId = `${centre.id}-slot-${i}`;
-      slotIds[centre.id].push(slotId);
-      await db
-        .collection("slots")
-        .doc(slotId)
-        .set({
-          centreId: centre.id,
-          date: today,
-          startTime: s.start,
-          endTime: s.end,
-          capacity: s.capacity,
-          bookedCount: s.booked,
-        });
+    for (const dayOffset of [0, 1, 2]) {
+      const date = dayOffset === 0 ? today : dateForOffset(dayOffset);
+      for (const [i, s] of slotDefs.entries()) {
+        const slotId = dayOffset === 0 ? `${centre.id}-slot-${i}` : `${centre.id}-slot-${i}-d${dayOffset}`;
+        if (dayOffset === 0) slotIds[centre.id].push(slotId);
+        // Tomorrow/day-after start empty (booked: 0) regardless of today's demo booking
+        // pattern — those bookings are specific to "today's" live-demo narrative.
+        const booked = dayOffset === 0 ? s.booked : 0;
+        await db
+          .collection("slots")
+          .doc(slotId)
+          .set({
+            centreId: centre.id,
+            date,
+            startTime: s.start,
+            endTime: s.end,
+            capacity: s.capacity,
+            bookedCount: booked,
+          });
+      }
     }
   }
 

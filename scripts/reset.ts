@@ -49,9 +49,20 @@ const today = new Date().toISOString().slice(0, 10);
 
 // --- Fixed IDs scripts/seed.ts creates, mirrored exactly so we never delete seed data. ---
 const CENTRE_IDS = ["centre-ksn", "centre-pnp", "centre-snp"];
-const SLOT_IDS = CENTRE_IDS.flatMap((centreId) =>
-  [0, 1, 2, 3].map((i) => `${centreId}-slot-${i}`)
-);
+// Seeded dailyCapacityQuintals per centre (Daily Buying Capacity feature) — mirrors
+// scripts/seed.ts exactly, so remainingCapacityQuintals can be restored to "nothing bought yet
+// today" the same way slots.bookedCount is restored below.
+const SEEDED_CAPACITY_QUINTALS: Record<string, number> = {
+  "centre-ksn": 500,
+  "centre-pnp": 400,
+  "centre-snp": 300,
+};
+// Today's slots keep the original `{centre}-slot-{i}` IDs; tomorrow/day-after (advance
+// booking demo data) use a `-d{offset}` suffix — see scripts/seed.ts.
+const SLOT_IDS = CENTRE_IDS.flatMap((centreId) => [
+  ...[0, 1, 2, 3].map((i) => `${centreId}-slot-${i}`),
+  ...[1, 2].flatMap((dayOffset) => [0, 1, 2, 3].map((i) => `${centreId}-slot-${i}-d${dayOffset}`)),
+]);
 const FARMER_IDS = [
   "farmer-demo-1",
   "farmer-demo-2",
@@ -114,11 +125,12 @@ async function reset() {
     wipeAll("identityVerification"),
     wipeAll("staffSessions"),
     wipeAll("tokenCounters"),
+    wipeAll("expressSlotCounters"),
   ]);
   console.log(
     `  notifications -${usageOnly[0]}, procurement -${usageOnly[1]}, payments -${usageOnly[2]}, ` +
       `identityVerification -${usageOnly[3]}, staffSessions -${usageOnly[4]}, ` +
-      `tokenCounters -${usageOnly[5]}`
+      `tokenCounters -${usageOnly[5]}, expressSlotCounters -${usageOnly[6]}`
   );
 
   console.log("Restoring seeded slot bookedCount and queue position counters...");
@@ -133,9 +145,33 @@ async function reset() {
       )
     )
   );
+  // Tomorrow/day-after slots are seeded empty (bookedCount: 0) — advance-booking rehearsal
+  // traffic against them needs resetting back to that, same as today's slots above.
+  await Promise.all(
+    CENTRE_IDS.flatMap((centreId) =>
+      [1, 2].flatMap((dayOffset) =>
+        [0, 1, 2, 3].map((i) =>
+          db
+            .collection("slots")
+            .doc(`${centreId}-slot-${i}-d${dayOffset}`)
+            .set({ bookedCount: 0 }, { merge: true })
+        )
+      )
+    )
+  );
   await Promise.all(
     QUEUE_POSITION_COUNTER_IDS.map((id) =>
       db.collection("queuePositionCounters").doc(id).set({ count: 3 })
+    )
+  );
+
+  console.log("Restoring seeded daily buying capacity (remainingCapacityQuintals)...");
+  await Promise.all(
+    CENTRE_IDS.map((centreId) =>
+      db
+        .collection("centres")
+        .doc(centreId)
+        .set({ remainingCapacityQuintals: SEEDED_CAPACITY_QUINTALS[centreId] }, { merge: true })
     )
   );
 

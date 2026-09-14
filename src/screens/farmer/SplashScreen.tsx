@@ -4,14 +4,20 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
 import { colors, fontSize, radius, spacing, touchTarget } from "../../theme";
 import { useLanguage } from "../../context/LanguageContext";
+import type { Lang } from "../../i18n/strings";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Splash">;
 
-/** Splash + Language Select — UI/UX spec screen 0. No text entry, just tap to choose. */
+/**
+ * Splash + Language Select — UI/UX spec screen 0. No text entry, just tap to choose.
+ * Deliberately only Hindi/English here (a farmer's very first tap on the app) — every other
+ * supported language is one tap away in Settings once they're past registration. See
+ * i18n/strings.ts's top-of-file comment for the full language list and why.
+ */
 export function SplashScreen({ navigation }: Props) {
   const { setLang, t } = useLanguage();
 
-  const choose = (lang: "hi" | "en") => {
+  const choose = (lang: Lang) => {
     setLang(lang);
     navigation.replace("Aadhaar");
   };
@@ -26,13 +32,13 @@ export function SplashScreen({ navigation }: Props) {
           style={({ pressed }) => [styles.langBtn, pressed && styles.pressed]}
           onPress={() => choose("hi")}
         >
-          <Text style={styles.langLabel}>हिंदी</Text>
+          <Text style={styles.langLabel}>{t("langHindi")}</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.langBtn, pressed && styles.pressed]}
           onPress={() => choose("en")}
         >
-          <Text style={styles.langLabel}>English</Text>
+          <Text style={styles.langLabel}>{t("langEnglish")}</Text>
         </Pressable>
       </View>
     </View>

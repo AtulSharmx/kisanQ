@@ -14,5 +14,6 @@ export type RootStackParamList = {
   LiveQueue: undefined;
   ProcurementStatus: undefined;
   Notifications: undefined;
+  Settings: undefined;
   ComingSoon: { titleKey: "homeMyProduce" | "homePayment" };
 };

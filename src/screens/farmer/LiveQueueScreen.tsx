@@ -10,6 +10,7 @@ import { PrimaryButton } from "../../components/PrimaryButton";
 import {
   AVERAGE_PROCESSING_MINUTES,
   getActiveBookingForFarmer,
+  isAheadInQueue,
   listenBooking,
   listenQueueForCentre,
   type BookingWithId,
@@ -69,8 +70,12 @@ export function LiveQueueScreen({ navigation }: Props) {
       const mine = entries.find((e) => e.bookingId === booking.id);
       if (!mine) return;
       setMyStatus(mine.status);
+      // Express entries (Tatkal-style, fixed price + capped quota — see firestoreService.ts)
+      // sort ahead of regular ones regardless of raw position; isAheadInQueue() is the single
+      // shared rule for that, also used by the Operator's Live Queue Management screen, so the
+      // two screens never disagree about who's actually next.
       const ahead = entries.filter(
-        (e) => e.status !== "completed" && e.position < mine.position
+        (e) => e.status !== "completed" && isAheadInQueue(e, mine)
       ).length;
       setPeopleAhead(ahead);
     });
@@ -114,6 +119,7 @@ export function LiveQueueScreen({ navigation }: Props) {
   return (
     <ScreenContainer>
       <View style={styles.center}>
+        {booking?.isExpress && <Text style={styles.expressBadge}>{t("expressBadge")}</Text>}
         {myStatus === "processing" ? (
           <>
             <Text style={styles.icon}>📣</Text>
@@ -150,4 +156,10 @@ const styles = StyleSheet.create({
   aheadNumber: { fontSize: 72, fontWeight: "800", color: colors.primary },
   aheadText: { fontSize: fontSize.header, fontWeight: "700", color: colors.text, textAlign: "center" },
   waitLabel: { fontSize: fontSize.label, color: colors.textMuted, marginTop: spacing.sm },
+  expressBadge: {
+    fontSize: fontSize.body,
+    fontWeight: "800",
+    color: colors.accent,
+    marginBottom: spacing.sm,
+  },
 });

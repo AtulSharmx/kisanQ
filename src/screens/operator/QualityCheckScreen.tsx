@@ -48,6 +48,7 @@ export function QualityCheckScreen({ route, navigation }: Props) {
         grade: grade ?? "-",
         decision,
         rejectionReason: decision === "reject" ? rejectionReason.trim() || undefined : undefined,
+        actualWeight,
       });
       goBackToQueue();
     } catch (e) {

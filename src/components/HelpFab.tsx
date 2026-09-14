@@ -1,5 +1,6 @@
 import React from "react";
-import { Alert, Linking, Pressable, StyleSheet, Text } from "react-native";
+import { Alert, Linking, StyleSheet, Text } from "react-native";
+import { AnimatedPressable } from "./AnimatedPressable";
 import { colors, radius, shadow, touchTarget } from "../theme";
 import { useLanguage } from "../context/LanguageContext";
 
@@ -20,13 +21,13 @@ export function HelpFab() {
   };
 
   return (
-    <Pressable
+    <AnimatedPressable
       accessibilityLabel={t("homeHelp")}
       onPress={onPress}
       style={({ pressed }) => [styles.fab, pressed && styles.pressed]}
     >
       <Text style={styles.icon}>📞</Text>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 

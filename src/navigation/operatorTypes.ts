@@ -13,4 +13,6 @@ export type OperatorStackParamList = {
   };
   AdminOverview: undefined;
   AdminDrilldown: undefined;
+  AdminSettings: undefined;
+  OperatorSettings: undefined;
 };

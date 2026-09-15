@@ -32,19 +32,19 @@ function FarmerRoot() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        {Platform.OS === "web" ? (
-          <OperatorProvider>
-            <OperatorNavigator />
-          </OperatorProvider>
-        ) : (
-          <LanguageProvider>
+      <LanguageProvider>
+        <NavigationContainer>
+          {Platform.OS === "web" ? (
+            <OperatorProvider>
+              <OperatorNavigator />
+            </OperatorProvider>
+          ) : (
             <FarmerProvider>
               <FarmerRoot />
             </FarmerProvider>
-          </LanguageProvider>
-        )}
-      </NavigationContainer>
+          )}
+        </NavigationContainer>
+      </LanguageProvider>
       <StatusBar style="dark" />
     </SafeAreaProvider>
   );

@@ -5,6 +5,7 @@ import { auth, db } from "../lib/firebase";
 import { COLLECTIONS } from "../types/firestore";
 import type { Staff, StaffSession } from "../types/firestore";
 import { hashPin } from "../services/pinAuth";
+import { useLanguage } from "./LanguageContext";
 
 interface OperatorContextValue {
   session: StaffSession | null;
@@ -24,6 +25,7 @@ const OperatorContext = createContext<OperatorContextValue | null>(null);
  * anonymous-auth-backed session actually gets enforced server-side.
  */
 export function OperatorProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useLanguage();
   const [uid, setUid] = useState<string | null>(null);
   const [session, setSession] = useState<StaffSession | null>(null);
   const [staffName, setStaffName] = useState<string | null>(null);
@@ -59,13 +61,13 @@ export function OperatorProvider({ children }: { children: React.ReactNode }) {
     try {
       const staffSnap = await getDoc(doc(db, COLLECTIONS.staff, staffId.trim()));
       if (!staffSnap.exists()) {
-        setLoginError("Staff ID not found");
+        setLoginError(t("staffIdNotFound"));
         return;
       }
       const staff = staffSnap.data() as Staff;
       const hashed = await hashPin(pin);
       if (hashed !== staff.pinHash) {
-        setLoginError("Incorrect PIN");
+        setLoginError(t("incorrectPin"));
         return;
       }
       const newSession: StaffSession = {
@@ -78,7 +80,7 @@ export function OperatorProvider({ children }: { children: React.ReactNode }) {
       setStaffName(staff.name);
     } catch (e) {
       console.error(e);
-      setLoginError("Login failed — check your connection and try again.");
+      setLoginError(t("loginFailedCheckConnection"));
     } finally {
       setLoggingIn(false);
     }

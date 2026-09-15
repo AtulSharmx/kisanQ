@@ -1,23 +1,16 @@
 import React, { useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { OperatorStackParamList } from "../../navigation/operatorTypes";
 import { colors, fontSize, radius, shadow, spacing, touchTarget } from "../../theme";
 import { PrimaryButton } from "../../components/PrimaryButton";
+import { OperatorHeader } from "../../components/OperatorHeader";
+import { useLanguage } from "../../context/LanguageContext";
 import { useOperator } from "../../context/OperatorContext";
 import {
   checkInBooking,
   findCheckInCandidate,
-  getCentre,
   getCrop,
   getFarmer,
   getSlot,
@@ -40,6 +33,7 @@ interface Candidate {
  * "can't scan?" link).
  */
 export function ScanCheckInScreen({ navigation }: Props) {
+  const { t } = useLanguage();
   const { session, staffName, logout } = useOperator();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = useState(false);
@@ -60,7 +54,7 @@ export function ScanCheckInScreen({ navigation }: Props) {
     try {
       const booking = await findCheckInCandidate(tokenNumber, session.assignedCentreId);
       if (!booking) {
-        setLookupError("टोकन नहीं मिला या पहले ही चेक-इन हो चुका है। (Token not found or already checked in.)");
+        setLookupError(t("operatorTokenNotFound"));
         return;
       }
       const [farmer, crop, slot] = await Promise.all([
@@ -69,13 +63,13 @@ export function ScanCheckInScreen({ navigation }: Props) {
         getSlot(booking.slotId),
       ]);
       if (!farmer || !crop) {
-        setLookupError("डेटा लोड नहीं हो सका। (Could not load booking details.)");
+        setLookupError(t("operatorDataLoadFailed"));
         return;
       }
       setCandidate({ booking, farmer, crop, slot });
     } catch (e) {
       console.error(e);
-      setLookupError("इंटरनेट कनेक्शन जांचें। (Check your internet connection.)");
+      setLookupError(t("noInternet"));
     } finally {
       setLooking(false);
     }
@@ -92,7 +86,7 @@ export function ScanCheckInScreen({ navigation }: Props) {
       setManualToken("");
     } catch (e) {
       console.error(e);
-      setCheckInError(e instanceof Error ? e.message : "सेव नहीं हुआ, दोबारा कोशिश करें।");
+      setCheckInError(e instanceof Error ? e.message : t("saveFailed"));
     } finally {
       setCheckingIn(false);
     }
@@ -108,24 +102,27 @@ export function ScanCheckInScreen({ navigation }: Props) {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>चेक-इन ({staffName})</Text>
-        <View style={styles.headerActions}>
-          <Pressable
-            onPress={() => navigation.navigate("LiveQueueManagement")}
-            style={({ pressed }) => pressed && styles.pressed}
-          >
-            <Text style={styles.headerLink}>लाइव कतार →</Text>
-          </Pressable>
-          <Pressable onPress={logout} style={({ pressed }) => pressed && styles.pressed}>
-            <Text style={styles.headerLink}>लॉग आउट</Text>
-          </Pressable>
-        </View>
-      </View>
+      <OperatorHeader
+        title={t("operatorCheckInTitle")}
+        staffName={staffName}
+        actions={[
+          {
+            icon: "⏳",
+            label: t("operatorLiveQueueLink"),
+            onPress: () => navigation.navigate("LiveQueueManagement"),
+          },
+          {
+            icon: "⚙️",
+            label: t("adminSettingsLink"),
+            onPress: () => navigation.navigate("OperatorSettings"),
+          },
+          { icon: "🚪", label: t("logoutBtn"), onPress: logout, danger: true },
+        ]}
+      />
 
       <ScrollView contentContainerStyle={styles.content}>
         <PrimaryButton
-          label={scanning ? "स्कैन बंद करें" : "स्कैन करें (Scan)"}
+          label={scanning ? t("operatorStopScanBtn") : t("operatorScanBtn")}
           onPress={toggleScan}
           variant={scanning ? "outline" : "primary"}
         />
@@ -140,7 +137,7 @@ export function ScanCheckInScreen({ navigation }: Props) {
           </View>
         )}
 
-        <Text style={styles.orLabel}>या टोकन नंबर डालें (or enter token number)</Text>
+        <Text style={styles.orLabel}>{t("operatorOrEnterToken")}</Text>
         <TextInput
           value={manualToken}
           onChangeText={setManualToken}
@@ -151,7 +148,7 @@ export function ScanCheckInScreen({ navigation }: Props) {
           style={styles.manualInput}
         />
         <PrimaryButton
-          label="खोजें (Find)"
+          label={t("operatorFindBtn")}
           onPress={() => lookup(manualToken)}
           disabled={!manualToken.trim()}
           loading={looking}
@@ -159,26 +156,31 @@ export function ScanCheckInScreen({ navigation }: Props) {
 
         {lookupError && <Text style={styles.error}>{lookupError}</Text>}
         {lastCheckedIn && (
-          <Text style={styles.success}>✅ {lastCheckedIn} चेक-इन हो गया।</Text>
+          <Text style={styles.success}>
+            {t("operatorCheckedInSuccess").replace("{token}", lastCheckedIn)}
+          </Text>
         )}
 
         {looking && <ActivityIndicator color={colors.primary} style={styles.loader} />}
 
         {candidate && (
           <View style={styles.card}>
-            <Row label="नाम (Name)" value={candidate.farmer.name} />
-            <Row label="टोकन (Token)" value={candidate.booking.tokenNumber} />
-            <Row label="फसल (Crop)" value={candidate.crop.cropType} />
+            <Row label={t("profileName")} value={candidate.farmer.name} />
+            <Row label={t("operatorTokenLabel")} value={candidate.booking.tokenNumber} />
+            <Row label={t("operatorCropLabel")} value={candidate.crop.cropType} />
             <Row
-              label="अनुमानित मात्रा (Expected Qty)"
+              label={t("operatorExpectedQtyLabel")}
               value={`${candidate.crop.expectedQuantity} quintals`}
             />
             {candidate.slot && (
-              <Row label="स्लॉट (Slot)" value={`${candidate.slot.startTime} - ${candidate.slot.endTime}`} />
+              <Row
+                label={t("operatorSlotLabel")}
+                value={`${candidate.slot.startTime} - ${candidate.slot.endTime}`}
+              />
             )}
             {checkInError && <Text style={styles.error}>{checkInError}</Text>}
             <View style={styles.spacer} />
-            <PrimaryButton label="चेक-इन करें (Check-In)" onPress={onCheckIn} loading={checkingIn} />
+            <PrimaryButton label={t("operatorCheckInBtn")} onPress={onCheckIn} loading={checkingIn} />
           </View>
         )}
       </ScrollView>
@@ -197,18 +199,6 @@ function Row({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  headerTitle: { fontSize: fontSize.label, fontWeight: "800", color: colors.text },
-  headerActions: { flexDirection: "row", gap: spacing.lg },
-  headerLink: { color: colors.primary, fontWeight: "700" },
   content: { padding: spacing.lg, maxWidth: 560, width: "100%", alignSelf: "center", gap: spacing.md },
   cameraWrap: {
     height: 280,
@@ -246,5 +236,4 @@ const styles = StyleSheet.create({
   rowLabel: { color: colors.textMuted },
   rowValue: { fontWeight: "700", color: colors.text, textTransform: "capitalize" },
   spacer: { height: spacing.sm },
-  pressed: { opacity: 0.7 },
 });

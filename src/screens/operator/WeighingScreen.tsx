@@ -4,6 +4,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { OperatorStackParamList } from "../../navigation/operatorTypes";
 import { colors, fontSize, radius, shadow, spacing } from "../../theme";
 import { PrimaryButton } from "../../components/PrimaryButton";
+import { useLanguage } from "../../context/LanguageContext";
 import { useOperator } from "../../context/OperatorContext";
 import {
   getBooking,
@@ -19,6 +20,7 @@ type Props = NativeStackScreenProps<OperatorStackParamList, "Weighing">;
 /** Weighing screen — UI/UX spec Operator screen 4: expected vs actual, numeric input. */
 export function WeighingScreen({ route, navigation }: Props) {
   const { bookingId, queueId, farmerId } = route.params;
+  const { t } = useLanguage();
   const { staffName } = useOperator();
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState<BookingWithId | null>(null);
@@ -43,7 +45,7 @@ export function WeighingScreen({ route, navigation }: Props) {
   const onConfirm = async () => {
     const weight = Number(actualWeight);
     if (!weight || weight <= 0) {
-      setError("सही वज़न डालें (Enter a valid weight)");
+      setError(t("operatorEnterValidWeight"));
       return;
     }
     setSaving(true);
@@ -60,7 +62,7 @@ export function WeighingScreen({ route, navigation }: Props) {
       });
     } catch (e) {
       console.error(e);
-      setError("सेव नहीं हुआ, दोबारा कोशिश करें। (Save failed, try again.)");
+      setError(t("saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -77,21 +79,23 @@ export function WeighingScreen({ route, navigation }: Props) {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>वज़न ({staffName})</Text>
+        <Text style={styles.headerTitle}>
+          ⚖️ {t("operatorWeighingTitle")} ({staffName})
+        </Text>
       </View>
 
       <View style={styles.content}>
         <View style={styles.card}>
-          <Row label="किसान (Farmer)" value={farmer?.name ?? "-"} />
-          <Row label="टोकन (Token)" value={booking?.tokenNumber ?? "-"} />
-          <Row label="फसल (Crop)" value={crop?.cropType ?? "-"} />
+          <Row label={t("operatorFarmerLabel")} value={farmer?.name ?? "-"} />
+          <Row label={t("operatorTokenLabel")} value={booking?.tokenNumber ?? "-"} />
+          <Row label={t("operatorCropLabel")} value={crop?.cropType ?? "-"} />
           <Row
-            label="अनुमानित मात्रा (Expected)"
+            label={t("operatorExpectedQtyLabel")}
             value={crop ? `${crop.expectedQuantity} quintals` : "-"}
           />
         </View>
 
-        <Text style={styles.label}>वास्तविक वज़न (Actual weight, quintals)</Text>
+        <Text style={styles.label}>{t("operatorActualLabel")} (quintals)</Text>
         <TextInput
           value={actualWeight}
           onChangeText={setActualWeight}
@@ -104,7 +108,7 @@ export function WeighingScreen({ route, navigation }: Props) {
         {error && <Text style={styles.error}>{error}</Text>}
         <View style={styles.spacer} />
         <PrimaryButton
-          label="वज़न कन्फर्म करें (Confirm Weight)"
+          label={t("operatorConfirmWeightBtn")}
           onPress={onConfirm}
           loading={saving}
           disabled={!actualWeight}
@@ -132,7 +136,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     backgroundColor: colors.surface,
   },
-  headerTitle: { fontSize: fontSize.label, fontWeight: "800", color: colors.text },
+  headerTitle: { fontSize: fontSize.label, fontWeight: "800", color: colors.primary },
   content: { padding: spacing.lg, maxWidth: 480, width: "100%", alignSelf: "center", gap: spacing.md },
   card: {
     backgroundColor: colors.surface,

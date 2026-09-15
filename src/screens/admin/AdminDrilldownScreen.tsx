@@ -10,15 +10,20 @@ import {
 } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { OperatorStackParamList } from "../../navigation/operatorTypes";
-import { colors, fontSize, radius, spacing, touchTarget } from "../../theme";
+import { colors, fontSize, radius, shadow, spacing, touchTarget } from "../../theme";
+import { useLanguage } from "../../context/LanguageContext";
 import { useOperator } from "../../context/OperatorContext";
+import { CROPS } from "../../data/crops";
 import {
-  increaseCentreCapacity,
+  addCentreCropCapacity,
+  increaseCentreCropCapacity,
   listenAdminCentreBreakdown,
+  listenCentreCropCapacities,
   OVERLOAD_THRESHOLD_PCT,
   type CentreBreakdown,
-  type CentreWithId,
+  type CentreCropCapacityWithId,
 } from "../../services/firestoreService";
+import type { Lang } from "../../i18n/strings";
 
 type Props = NativeStackScreenProps<OperatorStackParamList, "AdminDrilldown">;
 
@@ -30,11 +35,18 @@ type Props = NativeStackScreenProps<OperatorStackParamList, "AdminDrilldown">;
  * choice, not a spec value.
  */
 export function AdminDrilldownScreen({ navigation }: Props) {
+  const { t, lang } = useLanguage();
   const { staffName } = useOperator();
   const [rows, setRows] = useState<CentreBreakdown[] | null>(null);
+  const [capacityRows, setCapacityRows] = useState<CentreCropCapacityWithId[]>([]);
 
   useEffect(() => {
     const unsubscribe = listenAdminCentreBreakdown(setRows);
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = listenCentreCropCapacities(setCapacityRows);
     return unsubscribe;
   }, []);
 
@@ -52,13 +64,24 @@ export function AdminDrilldownScreen({ navigation }: Props) {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>District → Centre ({staffName})</Text>
-        <Pressable
-          onPress={() => navigation.navigate("AdminOverview")}
-          style={({ pressed }) => pressed && styles.pressed}
-        >
-          <Text style={styles.headerLink}>← Overview</Text>
-        </Pressable>
+        <View>
+          <Text style={styles.headerAppName}>KisanQ — {t("adminDrilldownTitle")}</Text>
+          <Text style={styles.headerStaffName}>{staffName}</Text>
+        </View>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => navigation.navigate("AdminOverview")}
+            style={({ pressed }) => [styles.headerChip, pressed && styles.pressed]}
+          >
+            <Text style={styles.headerChipText}>{t("backToOverview")}</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => navigation.navigate("AdminSettings")}
+            style={({ pressed }) => [styles.headerChip, pressed && styles.pressed]}
+          >
+            <Text style={styles.headerChipText}>⚙️ {t("adminSettingsLink")}</Text>
+          </Pressable>
+        </View>
       </View>
 
       {!rows ? (
@@ -66,17 +89,17 @@ export function AdminDrilldownScreen({ navigation }: Props) {
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.tableHeaderRow}>
-            <Text style={[styles.headerCell, styles.centreCol]}>Centre</Text>
-            <Text style={styles.headerCell}>Bookings</Text>
-            <Text style={styles.headerCell}>Completed</Text>
-            <Text style={styles.headerCell}>Waiting</Text>
-            <Text style={styles.headerCell}>Avg Wait</Text>
-            <Text style={styles.headerCell}>Utilization</Text>
+            <Text style={[styles.headerCell, styles.centreCol]}>{t("colCentre")}</Text>
+            <Text style={styles.headerCell}>{t("colBookings")}</Text>
+            <Text style={styles.headerCell}>{t("statCompleted")}</Text>
+            <Text style={styles.headerCell}>{t("colWaiting")}</Text>
+            <Text style={styles.headerCell}>{t("colAvgWait")}</Text>
+            <Text style={styles.headerCell}>{t("colUtilization")}</Text>
           </View>
 
           {byDistrict.map(([district, centres]) => (
             <View key={district} style={styles.districtGroup}>
-              <Text style={styles.districtLabel}>{district}</Text>
+              <Text style={styles.districtLabel}>📍 {district}</Text>
               {centres.map((row) => (
                 <View key={row.centre.id} style={styles.centreBlock}>
                   <View style={styles.row}>
@@ -91,14 +114,18 @@ export function AdminDrilldownScreen({ navigation }: Props) {
                       {row.utilizationPct}% {row.overloaded ? "⚠️" : ""}
                     </Text>
                   </View>
-                  <CapacityRow centre={row.centre} />
+                  <CentreCapacitySection
+                    centreId={row.centre.id}
+                    capacities={capacityRows.filter((c) => c.centreId === row.centre.id)}
+                    lang={lang}
+                  />
                 </View>
               ))}
             </View>
           ))}
 
           <Text style={styles.footnote}>
-            ⚠️ = utilization above {OVERLOAD_THRESHOLD_PCT}% of daily capacity
+            {t("overloadedFootnote").replace("{pct}", String(OVERLOAD_THRESHOLD_PCT))}
           </Text>
         </ScrollView>
       )}
@@ -107,13 +134,50 @@ export function AdminDrilldownScreen({ navigation }: Props) {
 }
 
 /**
- * Daily Buying Capacity — view + manual increase, per centre. View-only for the current number
- * (an admin should see the true, possibly-negative value for real oversight — unlike the
- * farmer-facing Centre Selection screen, this is deliberately not clamped to 0); the increase
- * itself is the only capacity change this screen can make — an admin can't decrease it directly
- * or edit any other centre field here, matching the "manual increase only" spec.
+ * Daily Buying Capacity — one row per crop this centre has been configured with a capacity for
+ * (a centre buying more than one crop on the same day, e.g. wheat and mustard together in Rabi
+ * season, needs a separate number per crop — a single centre-wide ceiling can't tell you which
+ * crop's capacity is actually the constraint), plus a form to configure a new crop.
  */
-function CapacityRow({ centre }: { centre: CentreWithId }) {
+function CentreCapacitySection({
+  centreId,
+  capacities,
+  lang,
+}: {
+  centreId: string;
+  capacities: CentreCropCapacityWithId[];
+  lang: Lang;
+}) {
+  const { t } = useLanguage();
+  return (
+    <View style={styles.capacitySection}>
+      {capacities.map((c) => (
+        <CapacityRow key={c.id} capacity={c} lang={lang} />
+      ))}
+      <AddCapacityRow
+        centreId={centreId}
+        existingCropTypes={capacities.map((c) => c.cropType)}
+        lang={lang}
+        setCapacityLabel={t("adminSetCapacityLabel")}
+        addBtnLabel={t("adminAddBtn")}
+      />
+    </View>
+  );
+}
+
+function cropLabel(cropType: string, lang: Lang): string {
+  return CROPS.find((c) => c.key === cropType)?.labels[lang] ?? cropType;
+}
+
+/**
+ * View + manual increase for one already-configured (centre, crop) pair. View-only for the
+ * current number (an admin should see the true, possibly-negative value for real oversight —
+ * unlike the farmer-facing Centre Selection screen, this is deliberately not clamped to 0); the
+ * increase itself is the only change this row can make — an admin can't decrease it directly
+ * here, matching the "manual increase only" spec.
+ */
+function CapacityRow({ capacity, lang }: { capacity: CentreCropCapacityWithId; lang: Lang }) {
+  const { t } = useLanguage();
   const [amountText, setAmountText] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,17 +185,17 @@ function CapacityRow({ centre }: { centre: CentreWithId }) {
   const onIncrease = async () => {
     const amount = Number(amountText);
     if (!Number.isFinite(amount) || amount <= 0) {
-      setError("Enter a positive number");
+      setError(t("saveFailed"));
       return;
     }
     setSaving(true);
     setError(null);
     try {
-      await increaseCentreCapacity(centre.id, amount);
+      await increaseCentreCropCapacity(capacity.centreId, capacity.cropType, amount);
       setAmountText("");
     } catch (e) {
       console.error(e);
-      setError("Failed, try again");
+      setError(t("saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -140,8 +204,9 @@ function CapacityRow({ centre }: { centre: CentreWithId }) {
   return (
     <View style={styles.capacityRow}>
       <Text style={styles.capacityText}>
-        Buying capacity: {centre.remainingCapacityQuintals} / {centre.dailyCapacityQuintals} qtl
-        remaining
+        🌾 {cropLabel(capacity.cropType, lang)} — {t("adminBuyingCapacityLabel")}:{" "}
+        {capacity.remainingCapacityQuintals} / {capacity.dailyCapacityQuintals}{" "}
+        {t("adminQtlRemaining")}
       </Text>
       <View style={styles.capacityControls}>
         <TextInput
@@ -161,7 +226,100 @@ function CapacityRow({ centre }: { centre: CentreWithId }) {
             pressed && !saving && styles.pressed,
           ]}
         >
-          <Text style={styles.capacityBtnText}>{saving ? "..." : "Update"}</Text>
+          <Text style={styles.capacityBtnText}>{saving ? "..." : t("adminUpdateBtn")}</Text>
+        </Pressable>
+      </View>
+      {error && <Text style={styles.capacityError}>{error}</Text>}
+    </View>
+  );
+}
+
+/**
+ * Configures a new (centre, crop) pair's daily capacity for the first time — the only way a
+ * crop becomes capacity-gated at all (see the opt-in note on CentreCropCapacity in
+ * types/firestore.ts). Re-picking an already-configured crop is allowed (addCentreCropCapacity
+ * treats it as a deliberate reset back to full, not an error) — crops with an existing row are
+ * marked with a trailing " •" here so that's a visible, deliberate choice, not an accident.
+ */
+function AddCapacityRow({
+  centreId,
+  existingCropTypes,
+  lang,
+  setCapacityLabel,
+  addBtnLabel,
+}: {
+  centreId: string;
+  existingCropTypes: string[];
+  lang: Lang;
+  setCapacityLabel: string;
+  addBtnLabel: string;
+}) {
+  const { t } = useLanguage();
+  const [selectedCrop, setSelectedCrop] = useState<string | null>(null);
+  const [amountText, setAmountText] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const onAdd = async () => {
+    const amount = Number(amountText);
+    if (!selectedCrop || !Number.isFinite(amount) || amount <= 0) {
+      setError(t("saveFailed"));
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await addCentreCropCapacity(centreId, selectedCrop, amount);
+      setSelectedCrop(null);
+      setAmountText("");
+    } catch (e) {
+      console.error(e);
+      setError(t("saveFailed"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <View style={styles.addCapacityBlock}>
+      <Text style={styles.addCapacityLabel}>{setCapacityLabel}</Text>
+      <View style={styles.cropChipRow}>
+        {CROPS.map((c) => (
+          <Pressable
+            key={c.key}
+            onPress={() => setSelectedCrop(c.key)}
+            style={({ pressed }) => [
+              styles.cropChip,
+              selectedCrop === c.key && styles.cropChipActive,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={[styles.cropChipText, selectedCrop === c.key && styles.cropChipTextActive]}>
+              {c.labels[lang]}
+              {existingCropTypes.includes(c.key) ? " •" : ""}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      <View style={styles.capacityControls}>
+        <TextInput
+          value={amountText}
+          onChangeText={setAmountText}
+          keyboardType="numeric"
+          placeholder="daily qtl"
+          placeholderTextColor={colors.textMuted}
+          style={styles.capacityInput}
+        />
+        <Pressable
+          onPress={onAdd}
+          disabled={saving}
+          style={({ pressed }) => [
+            styles.capacityBtn,
+            saving && styles.capacityBtnDisabled,
+            pressed && !saving && styles.pressed,
+          ]}
+        >
+          <Text style={styles.capacityBtnText}>{saving ? "..." : addBtnLabel}</Text>
         </Pressable>
       </View>
       {error && <Text style={styles.capacityError}>{error}</Text>}
@@ -174,15 +332,29 @@ const styles = StyleSheet.create({
   loader: { marginTop: spacing.xl },
   header: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: spacing.sm,
     padding: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     backgroundColor: colors.surface,
   },
-  headerTitle: { fontSize: fontSize.label, fontWeight: "800", color: colors.text },
-  headerLink: { color: colors.primary, fontWeight: "700" },
+  headerAppName: { fontSize: fontSize.label, fontWeight: "800", color: colors.primary },
+  headerStaffName: { fontSize: fontSize.body, color: colors.textMuted, marginTop: 2 },
+  headerActions: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
+  headerChip: {
+    minHeight: 40,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerChipText: { color: colors.primary, fontWeight: "700", fontSize: fontSize.body },
   content: { padding: spacing.lg, maxWidth: 800, width: "100%", alignSelf: "center" },
   tableHeaderRow: {
     flexDirection: "row",
@@ -210,13 +382,21 @@ const styles = StyleSheet.create({
   centreName: { fontWeight: "700" },
   overloadedText: { color: colors.error, fontWeight: "700" },
   footnote: { marginTop: spacing.lg, color: colors.textMuted, fontSize: fontSize.body },
-  centreBlock: { borderBottomWidth: 1, borderBottomColor: colors.border },
+  centreBlock: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    ...shadow.card,
+  },
+  capacitySection: { gap: spacing.sm },
   capacityRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
     gap: spacing.sm,
-    paddingBottom: spacing.sm,
   },
   capacityText: { flex: 1, minWidth: 200, color: colors.textMuted, fontSize: fontSize.body },
   capacityControls: { flexDirection: "row", gap: spacing.sm },
@@ -243,5 +423,26 @@ const styles = StyleSheet.create({
   capacityBtnDisabled: { opacity: 0.5 },
   capacityBtnText: { color: colors.white, fontWeight: "700", fontSize: fontSize.body },
   capacityError: { width: "100%", color: colors.error, fontSize: fontSize.body },
+  addCapacityBlock: {
+    gap: spacing.xs,
+    paddingTop: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  addCapacityLabel: { fontSize: fontSize.body, color: colors.textMuted },
+  cropChipRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
+  cropChip: {
+    minHeight: 32,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cropChipActive: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
+  cropChipText: { fontSize: fontSize.body, color: colors.text },
+  cropChipTextActive: { color: colors.primary, fontWeight: "700" },
   pressed: { opacity: 0.7 },
 });

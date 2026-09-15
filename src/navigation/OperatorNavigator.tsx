@@ -10,6 +10,8 @@ import { WeighingScreen } from "../screens/operator/WeighingScreen";
 import { QualityCheckScreen } from "../screens/operator/QualityCheckScreen";
 import { AdminOverviewScreen } from "../screens/admin/AdminOverviewScreen";
 import { AdminDrilldownScreen } from "../screens/admin/AdminDrilldownScreen";
+import { AdminSettingsScreen } from "../screens/admin/AdminSettingsScreen";
+import { OperatorSettingsScreen } from "../screens/operator/OperatorSettingsScreen";
 import { colors } from "../theme";
 
 const Stack = createNativeStackNavigator<OperatorStackParamList>();
@@ -49,6 +51,7 @@ export function OperatorNavigator() {
       <Stack.Navigator screenOptions={screenOptions} initialRouteName="AdminOverview">
         <Stack.Screen name="AdminOverview" component={AdminOverviewScreen} />
         <Stack.Screen name="AdminDrilldown" component={AdminDrilldownScreen} />
+        <Stack.Screen name="AdminSettings" component={AdminSettingsScreen} />
       </Stack.Navigator>
     );
   }
@@ -59,6 +62,7 @@ export function OperatorNavigator() {
       <Stack.Screen name="LiveQueueManagement" component={LiveQueueManagementScreen} />
       <Stack.Screen name="Weighing" component={WeighingScreen} />
       <Stack.Screen name="QualityCheck" component={QualityCheckScreen} />
+      <Stack.Screen name="OperatorSettings" component={OperatorSettingsScreen} />
     </Stack.Navigator>
   );
 }

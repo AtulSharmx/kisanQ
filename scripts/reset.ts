@@ -49,14 +49,19 @@ const today = new Date().toISOString().slice(0, 10);
 
 // --- Fixed IDs scripts/seed.ts creates, mirrored exactly so we never delete seed data. ---
 const CENTRE_IDS = ["centre-ksn", "centre-pnp", "centre-snp"];
-// Seeded dailyCapacityQuintals per centre (Daily Buying Capacity feature) — mirrors
-// scripts/seed.ts exactly, so remainingCapacityQuintals can be restored to "nothing bought yet
-// today" the same way slots.bookedCount is restored below.
-const SEEDED_CAPACITY_QUINTALS: Record<string, number> = {
-  "centre-ksn": 500,
-  "centre-pnp": 400,
-  "centre-snp": 300,
+// Seeded per-crop daily buying capacity (Daily Buying Capacity feature) — mirrors
+// scripts/seed.ts's cropCapacityDefs exactly, so remainingCapacityQuintals can be restored to
+// "nothing bought yet today" the same way slots.bookedCount is restored below. An admin adding
+// capacity for some *other* crop during rehearsal (addCentreCropCapacity()) isn't a fixed seed
+// doc, so it gets wiped like any other real-usage document — see CROP_CAPACITY_IDS below.
+const SEEDED_CROP_CAPACITY: Record<string, Record<string, number>> = {
+  "centre-ksn": { wheat: 500, paddy: 300 },
+  "centre-pnp": { wheat: 400, paddy: 250 },
+  "centre-snp": { wheat: 300, paddy: 200 },
 };
+const CROP_CAPACITY_IDS = Object.entries(SEEDED_CROP_CAPACITY).flatMap(([centreId, byCrop]) =>
+  Object.keys(byCrop).map((cropType) => `${centreId}_${cropType}`)
+);
 // Today's slots keep the original `{centre}-slot-{i}` IDs; tomorrow/day-after (advance
 // booking demo data) use a `-d{offset}` suffix — see scripts/seed.ts.
 const SLOT_IDS = CENTRE_IDS.flatMap((centreId) => [
@@ -110,11 +115,12 @@ async function reset() {
     // during rehearsal would create a queuePositionCounters doc for that centre that seed.ts
     // never knows about, so it must be wiped like any other real-usage document.
     wipeExcept("queuePositionCounters", QUEUE_POSITION_COUNTER_IDS),
+    wipeExcept("centreCropCapacity", CROP_CAPACITY_IDS),
   ]);
   console.log(
     `  farmers -${mixed[0]}, crops -${mixed[1]}, bookings -${mixed[2]}, queue -${mixed[3]}, ` +
       `staff -${mixed[4]}, slots -${mixed[5]}, centres -${mixed[6]}, ` +
-      `queuePositionCounters -${mixed[7]}`
+      `queuePositionCounters -${mixed[7]}, centreCropCapacity -${mixed[8]}`
   );
 
   console.log("Wiping real-usage-only collections entirely...");
@@ -165,13 +171,15 @@ async function reset() {
     )
   );
 
-  console.log("Restoring seeded daily buying capacity (remainingCapacityQuintals)...");
+  console.log("Restoring seeded per-crop daily buying capacity (remainingCapacityQuintals)...");
   await Promise.all(
-    CENTRE_IDS.map((centreId) =>
-      db
-        .collection("centres")
-        .doc(centreId)
-        .set({ remainingCapacityQuintals: SEEDED_CAPACITY_QUINTALS[centreId] }, { merge: true })
+    Object.entries(SEEDED_CROP_CAPACITY).flatMap(([centreId, byCrop]) =>
+      Object.entries(byCrop).map(([cropType, dailyCapacityQuintals]) =>
+        db
+          .collection("centreCropCapacity")
+          .doc(`${centreId}_${cropType}`)
+          .set({ remainingCapacityQuintals: dailyCapacityQuintals }, { merge: true })
+      )
     )
   );
 

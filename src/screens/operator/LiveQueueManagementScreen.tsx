@@ -4,6 +4,8 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { OperatorStackParamList } from "../../navigation/operatorTypes";
 import { colors, fontSize, radius, spacing } from "../../theme";
 import { PrimaryButton } from "../../components/PrimaryButton";
+import { OperatorHeader } from "../../components/OperatorHeader";
+import { useLanguage } from "../../context/LanguageContext";
 import { useOperator } from "../../context/OperatorContext";
 import {
   callNextInQueue,
@@ -14,6 +16,7 @@ import {
   type QueueEntryWithId,
 } from "../../services/firestoreService";
 import type { QueueStatus } from "../../types/firestore";
+import type { StringKey } from "../../i18n/strings";
 
 type Props = NativeStackScreenProps<OperatorStackParamList, "LiveQueueManagement">;
 
@@ -24,17 +27,12 @@ interface Row {
   farmerId: string;
 }
 
-const TABS: { key: QueueStatus; label: string }[] = [
-  { key: "waiting", label: "प्रतीक्षा (Waiting)" },
-  { key: "processing", label: "प्रक्रिया में (Processing)" },
-  { key: "completed", label: "पूर्ण (Completed)" },
-];
-
 /**
  * Live Queue Management — UI/UX spec Operator screen 3: "this screen powers the farmer's Live
  * Queue screen — most important operator screen." Real-time via onSnapshot.
  */
 export function LiveQueueManagementScreen({ navigation }: Props) {
+  const { t } = useLanguage();
   const { session, staffName } = useOperator();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +41,12 @@ export function LiveQueueManagementScreen({ navigation }: Props) {
   const detailsCache = useRef(
     new Map<string, { tokenNumber: string; farmerName: string; farmerId: string }>()
   );
+
+  const TABS: { key: QueueStatus; labelKey: StringKey }[] = [
+    { key: "waiting", labelKey: "operatorTabWaiting" },
+    { key: "processing", labelKey: "operatorTabProcessing" },
+    { key: "completed", labelKey: "operatorTabCompleted" },
+  ];
 
   useEffect(() => {
     if (!session?.assignedCentreId) return;
@@ -93,15 +97,22 @@ export function LiveQueueManagementScreen({ navigation }: Props) {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>लाइव कतार ({staffName})</Text>
-        <Pressable
-          onPress={() => navigation.navigate("ScanCheckIn")}
-          style={({ pressed }) => pressed && styles.pressed}
-        >
-          <Text style={styles.headerLink}>← स्कैन/चेक-इन</Text>
-        </Pressable>
-      </View>
+      <OperatorHeader
+        title={t("operatorLiveQueueTitle")}
+        staffName={staffName}
+        actions={[
+          {
+            icon: "←",
+            label: t("operatorBackToCheckIn").replace("← ", ""),
+            onPress: () => navigation.navigate("ScanCheckIn"),
+          },
+          {
+            icon: "⚙️",
+            label: t("adminSettingsLink"),
+            onPress: () => navigation.navigate("OperatorSettings"),
+          },
+        ]}
+      />
 
       <View style={styles.tabs}>
         {TABS.map((tab) => (
@@ -115,7 +126,7 @@ export function LiveQueueManagementScreen({ navigation }: Props) {
             ]}
           >
             <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
-              {tab.label} ({rows.filter((r) => r.queue.status === tab.key).length})
+              {t(tab.labelKey)} ({rows.filter((r) => r.queue.status === tab.key).length})
             </Text>
           </Pressable>
         ))}
@@ -124,28 +135,28 @@ export function LiveQueueManagementScreen({ navigation }: Props) {
       <ScrollView contentContainerStyle={styles.list}>
         {loading && <ActivityIndicator color={colors.primary} style={styles.loader} />}
         {!loading && visibleRows.length === 0 && (
-          <Text style={styles.empty}>कोई प्रविष्टि नहीं</Text>
+          <Text style={styles.empty}>{t("operatorNoEntries")}</Text>
         )}
         {visibleRows.map((row) => (
           <View key={row.queue.id} style={styles.row}>
             <View>
-              {row.queue.isExpress && <Text style={styles.expressBadge}>⚡ Express</Text>}
+              {row.queue.isExpress && <Text style={styles.expressBadge}>{t("expressBadge")}</Text>}
               <Text style={styles.token}>{row.tokenNumber}</Text>
               <Text style={styles.name}>{row.farmerName}</Text>
               <Text style={styles.wait}>
-                अनुमानित प्रतीक्षा: {row.queue.estimatedWaitMinutes} मिनट
+                {t("operatorEstWaitPrefix")}: {row.queue.estimatedWaitMinutes} {t("minutes")}
               </Text>
             </View>
             {row.queue.status === "waiting" && (
               <PrimaryButton
-                label="अगला बुलाएं"
+                label={t("operatorCallNextBtn")}
                 onPress={() => onCallNext(row.queue.id)}
                 loading={callingId === row.queue.id}
               />
             )}
             {row.queue.status === "processing" && (
               <PrimaryButton
-                label="तौल करें (Weigh)"
+                label={t("operatorWeighBtn")}
                 onPress={() =>
                   navigation.navigate("Weighing", {
                     bookingId: row.queue.bookingId,
@@ -164,17 +175,6 @@ export function LiveQueueManagementScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  headerTitle: { fontSize: fontSize.label, fontWeight: "800", color: colors.text },
-  headerLink: { color: colors.primary, fontWeight: "700" },
   tabs: { flexDirection: "row", padding: spacing.sm, gap: spacing.sm },
   tab: {
     flex: 1,

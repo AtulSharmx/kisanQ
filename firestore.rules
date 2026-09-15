@@ -93,15 +93,27 @@ service cloud.firestore {
 
     match /centres/{centreId} {
       allow read: if true; // centre list is needed pre-login for slot browsing
-      allow write: if isAdmin()
-        // Daily Buying Capacity feature: submitQualityCheck()'s Accept step decrements
-        // remainingCapacityQuintals by the accepted booking's actual weighed quantity, in the
-        // same transaction as the existing procurement/booking/queue writes — same idea as the
-        // slots.bookedCount pattern above, but since the decrement amount varies per booking
-        // (not a fixed ±1), this can only check that the write is same-centre-operator, touches
-        // nothing but this one field, and moves the number down, never up — raising it back is
-        // a separate, deliberate admin-only action (increaseCentreCapacity()).
-        || (isOperatorForCentre(centreId)
+      allow write: if isAdmin();
+    }
+
+    match /centreCropCapacity/{capacityId} {
+      // Daily Buying Capacity feature, tracked per crop per centre (a mandi can legitimately be
+      // buying more than one crop the same day) — same read-openness reasoning as centres/
+      // above, since Centre Selection needs this before a farmer has "signed in" as themselves
+      // in any meaningful sense.
+      allow read: if true;
+      // Only an admin creates/deletes a (centre, crop) capacity entry — this is the deliberate,
+      // manual "start tracking this crop's capacity" action (addCentreCropCapacity()).
+      allow create, delete: if isAdmin();
+      // submitQualityCheck()'s Accept step decrements remainingCapacityQuintals by the accepted
+      // booking's actual weighed quantity, in the same transaction as the existing
+      // procurement/booking/queue writes — same idea as the slots.bookedCount pattern above,
+      // but since the decrement amount varies per booking (not a fixed ±1), this can only check
+      // that the write is same-centre-operator, touches nothing but this one field, and moves
+      // the number down, never up — raising it back is a separate, deliberate admin-only action
+      // (increaseCentreCropCapacity()).
+      allow update: if isAdmin()
+        || (isOperatorForCentre(resource.data.centreId)
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["remainingCapacityQuintals"])
             && request.resource.data.remainingCapacityQuintals < resource.data.remainingCapacityQuintals);
     }

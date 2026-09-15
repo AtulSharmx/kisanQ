@@ -47,18 +47,9 @@ export type CentreStatus = "active" | "inactive";
  * token format `[Centre code]-[4-digit sequential number]` (KisanQ_Missing_Details_Polish.md
  * section 4) — added here for that reason.
  *
- * `dailyCapacity` (existing field) is a *booking-count* ceiling used only for the Admin
- * Drilldown's utilization %/overloaded flag — unrelated to `dailyCapacityQuintals` /
- * `remainingCapacityQuintals`, which track the centre's real-world daily buying-capacity limit
- * in quintals (the unit used everywhere else in the app, not tons). `remainingCapacityQuintals`
- * is decremented automatically, in the same transaction as the existing accept logic, by
- * submitQualityCheck() whenever a booking is Accepted (by that booking's actual weighed
- * quantity) — never by a manual per-farmer update, which wouldn't hold up at real volume. It's
- * only ever increased by an admin's deliberate action (increaseCentreCapacity()) — a real
- * policy decision (head office authorizing more purchase for the day), not something automatic.
- * There's no automatic day-rollover reset of this number in this prototype, matching how
- * `slots.bookedCount` also isn't auto-reset daily — it's admin-managed via scripts/seed.ts and
- * scripts/reset.ts, same as every other "today"-scoped demo number in this project.
+ * `dailyCapacity` is a *booking-count* ceiling used only for the Admin Drilldown's utilization
+ * %/overloaded flag — unrelated to the Daily Buying Capacity feature (see
+ * CentreCropCapacity below), which tracks real-world quintals bought, per crop.
  */
 export interface Centre {
   name: string;
@@ -66,9 +57,34 @@ export interface Centre {
   district: string;
   location: GeoPoint;
   dailyCapacity: number;
+  status: CentreStatus;
+}
+
+/**
+ * centreCropCapacity/{centreId}_{cropType}
+ * Daily Buying Capacity, tracked per crop per centre rather than one number per centre — a
+ * single mandi legitimately buys more than one crop on the same day (wheat and mustard
+ * together in Rabi season, for instance), so one centre-wide ceiling couldn't tell you which
+ * crop's capacity was actually the constraint. `remainingCapacityQuintals` is decremented
+ * automatically, in the same transaction as the existing accept logic, by submitQualityCheck()
+ * whenever a booking is Accepted (by that booking's actual weighed quantity) — never by a
+ * manual per-farmer update, which wouldn't hold up at real volume. It's only ever increased by
+ * an admin's deliberate action (increaseCentreCropCapacity()) — a real policy decision (head
+ * office authorizing more purchase for the day), not something automatic. There's no automatic
+ * day-rollover reset of this number in this prototype, matching how `slots.bookedCount` also
+ * isn't auto-reset daily — it's admin-managed via scripts/seed.ts and scripts/reset.ts, same as
+ * every other "today"-scoped demo number in this project.
+ *
+ * Opt-in, not universal: a (centre, crop) pair with no document here isn't capacity-gated at
+ * all — an admin sets one up (via addCentreCropCapacity()) only for the crop(s) they're
+ * actively managing capacity for. This matches CLAUDE.md's MSP scope (wheat, paddy) without
+ * hard-blocking every other crop in the picker that isn't MSP-scoped.
+ */
+export interface CentreCropCapacity {
+  centreId: string;
+  cropType: string;
   dailyCapacityQuintals: number;
   remainingCapacityQuintals: number;
-  status: CentreStatus;
 }
 
 /** slots/{slotId} */
@@ -253,6 +269,7 @@ export const COLLECTIONS = {
   identityVerification: "identityVerification",
   crops: "crops",
   centres: "centres",
+  centreCropCapacity: "centreCropCapacity",
   slots: "slots",
   bookings: "bookings",
   queue: "queue",

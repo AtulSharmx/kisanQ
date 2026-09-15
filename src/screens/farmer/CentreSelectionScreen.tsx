@@ -8,10 +8,11 @@ import { useFarmer } from "../../context/FarmerContext";
 import { ScreenContainer } from "../../components/ScreenContainer";
 import {
   addCrop,
+  getCentreCropCapacity,
   getCentreEstimatedWaitMinutes,
   hasAvailableSlotToday,
   listActiveCentres,
-  listenActiveCentresCapacity,
+  listenCropCapacityAcrossCentres,
   type CentreWithId,
 } from "../../services/firestoreService";
 import { pseudoDistanceKm } from "../../utils/pseudoDistance";
@@ -23,6 +24,9 @@ interface Ranked {
   distanceKm: number;
   waitMinutes: number;
   hasSlots: boolean;
+  /** null = this centre hasn't been configured with a capacity limit for this crop at all —
+   * shown as "no limit tracked", not "0 available". */
+  remainingCapacityQuintals: number | null;
 }
 
 /** Centre Selection — UI/UX spec screen 7. Ranked list, not map-first. */
@@ -55,42 +59,41 @@ export function CentreSelectionScreen({ route, navigation }: Props) {
     if (!farmerId) return;
     listActiveCentres().then(async (centres) => {
       const withStats = await Promise.all(
-        centres.map(async (centre) => ({
-          centre,
-          distanceKm: pseudoDistanceKm(farmerId, centre.id),
-          waitMinutes: await getCentreEstimatedWaitMinutes(centre.id),
-          hasSlots: await hasAvailableSlotToday(centre.id),
-        }))
+        centres.map(async (centre) => {
+          const capacity = await getCentreCropCapacity(centre.id, cropType);
+          return {
+            centre,
+            distanceKm: pseudoDistanceKm(farmerId, centre.id),
+            waitMinutes: await getCentreEstimatedWaitMinutes(centre.id),
+            hasSlots: await hasAvailableSlotToday(centre.id),
+            remainingCapacityQuintals: capacity?.remainingCapacityQuintals ?? null,
+          };
+        })
       );
       withStats.sort((a, b) => a.waitMinutes - b.waitMinutes || a.distanceKm - b.distanceKm);
       setRanked(withStats);
     });
-  }, [farmerId]);
+  }, [farmerId, cropType]);
 
-  // Live remainingCapacityQuintals — this is the one piece of this screen's data that a farmer
-  // benefits from seeing update without reloading (an Accept elsewhere, or an admin's manual
-  // increase, both land here within the same second). Merged into the already-ranked list
-  // rather than recomputing distance/wait/hasSlots, which don't change live.
+  // Live remainingCapacityQuintals, for the one crop this farmer is bringing — this is the one
+  // piece of this screen's data that a farmer benefits from seeing update without reloading (an
+  // Accept elsewhere, or an admin's manual increase, both land here within the same second).
+  // Merged into the already-ranked list rather than recomputing distance/wait/hasSlots, which
+  // don't change live.
   useEffect(() => {
-    const unsubscribe = listenActiveCentresCapacity((remainingByCentreId) => {
+    const unsubscribe = listenCropCapacityAcrossCentres(cropType, (remainingByCentreId) => {
       setRanked((prev) =>
         prev
           ? prev.map((r) =>
               r.centre.id in remainingByCentreId
-                ? {
-                    ...r,
-                    centre: {
-                      ...r.centre,
-                      remainingCapacityQuintals: remainingByCentreId[r.centre.id],
-                    },
-                  }
+                ? { ...r, remainingCapacityQuintals: remainingByCentreId[r.centre.id] }
                 : r
             )
           : prev
       );
     });
     return unsubscribe;
-  }, []);
+  }, [cropType]);
 
   if (!ranked) {
     return (
@@ -129,12 +132,14 @@ export function CentreSelectionScreen({ route, navigation }: Props) {
             <Text style={item.hasSlots ? styles.slotsOk : styles.slotsFull}>
               {item.hasSlots ? t("slotsAvailable") : t("slotsFull")}
             </Text>
-            <Text style={styles.capacity}>
-              {t("remainingCapacityLabel").replace(
-                "{n}",
-                String(Math.max(0, item.centre.remainingCapacityQuintals))
-              )}
-            </Text>
+            {item.remainingCapacityQuintals !== null && (
+              <Text style={styles.capacity}>
+                {t("remainingCapacityLabel").replace(
+                  "{n}",
+                  String(Math.max(0, item.remainingCapacityQuintals))
+                )}
+              </Text>
+            )}
           </Pressable>
         )}
       />

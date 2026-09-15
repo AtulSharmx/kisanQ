@@ -1,11 +1,15 @@
 import React, { useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 import { colors, fontSize, radius, shadow, spacing, touchTarget } from "../../theme";
+import { useLanguage } from "../../context/LanguageContext";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { useOperator } from "../../context/OperatorContext";
 
-/** Staff Login — UI/UX spec Operator screen 1. Staff ID + PIN, not Aadhaar-based. */
+/** Staff Login — UI/UX spec Operator screen 1. Staff ID + PIN, not Aadhaar-based. Shared by
+ * both operator and admin roles — role is decided server-side by the staff record, not by
+ * anything picked here. */
 export function StaffLoginScreen() {
+  const { t } = useLanguage();
   const { login, loggingIn, loginError } = useOperator();
   const [staffId, setStaffId] = useState("");
   const [pin, setPin] = useState("");
@@ -13,9 +17,10 @@ export function StaffLoginScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        <Text style={styles.title}>KisanQ — Operator</Text>
+        <Text style={styles.logo}>🌾</Text>
+        <Text style={styles.title}>{t("staffLoginTitle")}</Text>
 
-        <Text style={styles.label}>Staff ID</Text>
+        <Text style={styles.label}>{t("staffIdLabel")}</Text>
         <TextInput
           value={staffId}
           onChangeText={setStaffId}
@@ -25,7 +30,7 @@ export function StaffLoginScreen() {
           style={styles.input}
         />
 
-        <Text style={styles.label}>PIN</Text>
+        <Text style={styles.label}>{t("pinLabel")}</Text>
         <TextInput
           value={pin}
           onChangeText={(v) => setPin(v.replace(/[^0-9]/g, "").slice(0, 6))}
@@ -40,7 +45,7 @@ export function StaffLoginScreen() {
 
         <View style={styles.spacer} />
         <PrimaryButton
-          label="लॉग इन करें (Log In)"
+          label={t("staffLoginBtn")}
           onPress={() => login(staffId, pin)}
           disabled={!staffId || !pin}
           loading={loggingIn}
@@ -68,6 +73,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     ...shadow.card,
   },
+  logo: { fontSize: 40, textAlign: "center", marginBottom: spacing.xs },
   title: {
     fontSize: fontSize.header,
     fontWeight: "800",

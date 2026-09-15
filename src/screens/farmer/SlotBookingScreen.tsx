@@ -10,12 +10,14 @@ import { PrimaryButton } from "../../components/PrimaryButton";
 import {
   advanceBookingDates,
   createBooking,
-  getCentre,
+  getCentreCropCapacity,
+  getCrop,
   getExpressAvailability,
   listSlotsForCentreOnDate,
-  type CentreWithId,
+  type CropWithId,
   type SlotWithId,
 } from "../../services/firestoreService";
+import type { CentreCropCapacity } from "../../types/firestore";
 
 type Props = NativeStackScreenProps<RootStackParamList, "SlotBooking">;
 
@@ -35,20 +37,28 @@ export function SlotBookingScreen({ route, navigation }: Props) {
     null
   );
   const [wantsExpress, setWantsExpress] = useState(false);
-  const [centre, setCentre] = useState<CentreWithId | null>(null);
+  const [crop, setCrop] = useState<CropWithId | null>(null);
+  const [capacity, setCapacity] = useState<CentreCropCapacity | null>(null);
   const [booking, setBooking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const selectedDate = dates[dateIndex];
   // Daily Buying Capacity feature — only gates *today*, since remainingCapacityQuintals has no
   // separate tracking for future days (advance bookings for tomorrow/day-after are unaffected).
+  // `capacity === null` covers both "not loaded yet" and "this (centre, crop) pair isn't
+  // capacity-gated at all" — either way, nothing to block on.
   const isTodayCapacityFull =
-    dateIndex === 0 && centre !== null && centre.remainingCapacityQuintals <= 0;
+    dateIndex === 0 && capacity !== null && capacity.remainingCapacityQuintals <= 0;
 
   useEffect(() => {
-    // Static reference data for this centre — fetched once, not per date change.
-    getCentre(centreId).then(setCentre);
-  }, [centreId]);
+    // Static reference data for this crop — fetched once, not per date change.
+    getCrop(cropId).then(setCrop);
+  }, [cropId]);
+
+  useEffect(() => {
+    if (!crop) return;
+    getCentreCropCapacity(centreId, crop.cropType).then(setCapacity);
+  }, [centreId, crop]);
 
   useEffect(() => {
     setSlots(null);
@@ -65,7 +75,7 @@ export function SlotBookingScreen({ route, navigation }: Props) {
   }, [centreId, selectedDate]);
 
   const onConfirm = async () => {
-    if (!selected || !farmerId) return;
+    if (!selected || !farmerId || !crop) return;
     setBooking(true);
     setError(null);
     try {
@@ -74,6 +84,7 @@ export function SlotBookingScreen({ route, navigation }: Props) {
         centreId,
         slotId: selected,
         cropId,
+        cropType: crop.cropType,
         wantsExpress,
       });
       navigation.replace("Token", { bookingId: result.bookingId });
@@ -97,7 +108,7 @@ export function SlotBookingScreen({ route, navigation }: Props) {
       getExpressAvailability(centreId, selectedDate).then((res) =>
         setExpress({ available: res.available, price: res.price, remaining: 2 - (res.nextRank - 1) })
       );
-      getCentre(centreId).then(setCentre);
+      if (crop) getCentreCropCapacity(centreId, crop.cropType).then(setCapacity);
       setSelected(null);
     } finally {
       setBooking(false);
@@ -191,7 +202,7 @@ export function SlotBookingScreen({ route, navigation }: Props) {
       <PrimaryButton
         label={t("confirmBookingBtn")}
         onPress={onConfirm}
-        disabled={!selected}
+        disabled={!selected || !crop}
         loading={booking}
       />
     </ScreenContainer>

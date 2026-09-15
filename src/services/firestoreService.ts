@@ -25,6 +25,7 @@ import type {
   AppNotification,
   Booking,
   Centre,
+  CentreCropCapacity,
   Crop,
   Farmer,
   IdentityVerification,
@@ -252,6 +253,10 @@ export interface CreateBookingInput {
   centreId: string;
   slotId: string;
   cropId: string;
+  /** Needed to look up this (centre, crop) pair's daily buying capacity — the caller already
+   * has this loaded (it's the crop the farmer picked earlier in the flow), so no extra
+   * transaction read is needed just to get it. */
+  cropType: string;
   /** Opt into an Express (Tatkal-style) slot, if one of the EXPRESS_QUOTA_PER_DAY is still
    * available for this slot's date — see getExpressAvailability(). */
   wantsExpress?: boolean;
@@ -282,8 +287,18 @@ export async function createBooking(
   const bookingRef = doc(collection(db, COLLECTIONS.bookings));
   const today = new Date().toISOString().slice(0, 10);
 
+  const capacityRef = doc(
+    db,
+    COLLECTIONS.centreCropCapacity,
+    `${input.centreId}_${input.cropType}`
+  );
+
   const result = await runTransaction(db, async (tx) => {
-    const [centreSnap, slotSnap] = await Promise.all([tx.get(centreRef), tx.get(slotRef)]);
+    const [centreSnap, slotSnap, capacitySnap] = await Promise.all([
+      tx.get(centreRef),
+      tx.get(slotRef),
+      tx.get(capacityRef),
+    ]);
 
     if (!centreSnap.exists()) throw new Error("Centre not found");
     if (!slotSnap.exists()) throw new Error("Slot not found");
@@ -291,15 +306,19 @@ export async function createBooking(
     const centre = centreSnap.data() as Centre;
     const slot = slotSnap.data() as Slot;
 
-    // Daily buying-capacity gate — only for *today's* date (this centre's
-    // remainingCapacityQuintals has no separate tracking for future days, so advance bookings
-    // for tomorrow/day-after are never blocked by it). Only gates *new* bookings; an
-    // already-confirmed booking that's mid-queue when capacity runs out is deliberately left
-    // alone — see the CENTRE_CAPACITY_FULL handling in SlotBookingScreen.
-    if (slot.date === today && centre.remainingCapacityQuintals <= 0) {
-      // Stable error code, same pattern as SLOT_FULL/EXPRESS_SOLD_OUT below — the screen maps
-      // this to a translated message rather than showing raw English.
-      throw new Error("CENTRE_CAPACITY_FULL");
+    // Daily buying-capacity gate — opt-in (only (centre, crop) pairs an admin has configured a
+    // capacity doc for are gated at all) and only for *today's* date (this doc has no separate
+    // tracking for future days, so advance bookings for tomorrow/day-after are never blocked by
+    // it). Only gates *new* bookings; an already-confirmed booking that's mid-queue when
+    // capacity runs out is deliberately left alone — see the CENTRE_CAPACITY_FULL handling in
+    // SlotBookingScreen.
+    if (capacitySnap.exists()) {
+      const capacity = capacitySnap.data() as CentreCropCapacity;
+      if (slot.date === today && capacity.remainingCapacityQuintals <= 0) {
+        // Stable error code, same pattern as SLOT_FULL/EXPRESS_SOLD_OUT below — the screen maps
+        // this to a translated message rather than showing raw English.
+        throw new Error("CENTRE_CAPACITY_FULL");
+      }
     }
 
     if (slot.bookedCount >= slot.capacity) {
@@ -734,9 +753,9 @@ export interface QualityCheckInput {
   grade: string;
   decision: "accept" | "reject";
   rejectionReason?: string;
-  /** Needed to decrement the booking's centre's remainingCapacityQuintals on Accept — already
-   * known to the screen from the earlier Weighing step, so no extra document read is needed to
-   * get it. */
+  /** Needed to decrement this (centre, crop) pair's remainingCapacityQuintals on Accept —
+   * already known to the screen from the earlier Weighing step, so no extra document read is
+   * needed to get it. */
   actualWeight: number;
 }
 
@@ -747,11 +766,14 @@ export interface QualityCheckInput {
  * Details Polish sec. 8. Either outcome closes out the booking/queue entry — the farmer's turn
  * at the centre is over regardless of the quality outcome.
  *
- * On Accept only, this also decrements the booking's centre's remainingCapacityQuintals by the
- * actual weighed quantity, in the same transaction — the Daily Buying Capacity feature's core
- * write. A reject doesn't touch capacity at all (nothing was bought). Not clamped at 0: the
- * last farmer of the day can legitimately push the number slightly negative (their produce was
- * already weighed and is being bought regardless) — the feature's actual constraint is on *new*
+ * On Accept only, this also decrements the booking's (centre, crop) pair's
+ * remainingCapacityQuintals by the actual weighed quantity, in the same transaction — the
+ * Daily Buying Capacity feature's core write. Only decrements if a centreCropCapacity doc
+ * exists for that pair (opt-in — see the type comment in types/firestore.ts); most bookings
+ * simply won't have one configured, and that's not an error, just "not capacity-gated." A
+ * reject doesn't touch capacity at all (nothing was bought). Not clamped at 0: the last farmer
+ * of the day can legitimately push the number slightly negative (their produce was already
+ * weighed and is being bought regardless) — the feature's actual constraint is on *new*
  * bookings (see createBooking()'s CENTRE_CAPACITY_FULL check), not on a farmer already this far
  * into the process.
  */
@@ -764,16 +786,25 @@ export async function submitQualityCheck(input: QualityCheckInput): Promise<void
 
   await runTransaction(db, async (tx) => {
     // All reads (across every branch) must happen before any writes below, per Firestore
-    // transaction rules — so the centre lookup, gated on `accepted`, has to run first.
-    let centreRef: ReturnType<typeof doc> | undefined;
-    let centre: Centre | undefined;
+    // transaction rules — so the booking/crop/capacity lookup, gated on `accepted`, has to run
+    // first.
+    let capacityRef: ReturnType<typeof doc> | undefined;
+    let capacity: CentreCropCapacity | undefined;
     if (accepted) {
       const bookingSnap = await tx.get(bookingRef);
       if (!bookingSnap.exists()) throw new Error("Booking not found");
       const booking = bookingSnap.data() as Booking;
-      centreRef = doc(db, COLLECTIONS.centres, booking.centreId);
-      const centreSnap = await tx.get(centreRef);
-      if (centreSnap.exists()) centre = centreSnap.data() as Centre;
+      const cropSnap = await tx.get(doc(db, COLLECTIONS.crops, booking.cropId));
+      if (cropSnap.exists()) {
+        const crop = cropSnap.data() as Crop;
+        capacityRef = doc(
+          db,
+          COLLECTIONS.centreCropCapacity,
+          `${booking.centreId}_${crop.cropType}`
+        );
+        const capacitySnap = await tx.get(capacityRef);
+        if (capacitySnap.exists()) capacity = capacitySnap.data() as CentreCropCapacity;
+      }
     }
 
     tx.update(procurementRef, {
@@ -786,9 +817,9 @@ export async function submitQualityCheck(input: QualityCheckInput): Promise<void
     tx.update(bookingRef, { status: "completed" });
     tx.update(queueRef, { status: "completed" });
 
-    if (centreRef && centre) {
-      tx.update(centreRef, {
-        remainingCapacityQuintals: centre.remainingCapacityQuintals - input.actualWeight,
+    if (capacityRef && capacity) {
+      tx.update(capacityRef, {
+        remainingCapacityQuintals: capacity.remainingCapacityQuintals - input.actualWeight,
       });
     }
 
@@ -809,40 +840,105 @@ export async function submitQualityCheck(input: QualityCheckInput): Promise<void
 }
 
 /**
- * Admin-only manual increase to a centre's remainingCapacityQuintals — e.g. head office
- * authorizing more purchase for the day. Deliberately kept separate from the Accept-triggered
- * decrement in submitQualityCheck(): per the feature spec, this stays a manual, deliberate
- * action, never automatic. No broadcast notification on increase (see SlotBookingScreen/
- * CentreSelectionScreen instead) — the live listener on centres/ already used elsewhere in this
- * file is enough for a farmer checking the Centre Selection screen to see the new number.
+ * Reads one (centre, crop) pair's capacity doc — null means that pair isn't capacity-gated at
+ * all (no admin has configured one). Used by SlotBookingScreen, which only needs its own
+ * centre+crop, not a live listener (the screen already refreshes this after a failed booking
+ * attempt, same as it does for slots/express availability).
  */
-export async function increaseCentreCapacity(centreId: string, byQuintals: number): Promise<void> {
-  const centreRef = doc(db, COLLECTIONS.centres, centreId);
+export async function getCentreCropCapacity(
+  centreId: string,
+  cropType: string
+): Promise<CentreCropCapacity | null> {
+  const snap = await getDoc(doc(db, COLLECTIONS.centreCropCapacity, `${centreId}_${cropType}`));
+  return snap.exists() ? (snap.data() as CentreCropCapacity) : null;
+}
+
+/**
+ * Admin-only: configures a (centre, crop) pair's daily buying capacity for the first time (or
+ * deliberately resets it — see below). This is the only way a centreCropCapacity doc comes into
+ * existence; nothing is capacity-gated until an admin does this. Uses `setDoc` rather than a
+ * transaction since it's a plain admin-authored write, not a counter mutated concurrently by
+ * other writers the way remainingCapacityQuintals is.
+ *
+ * Deliberately allowed to overwrite an existing doc for the same pair: re-"adding" a crop that
+ * already has a capacity entry is a legitimate manual action too (an admin resetting the day's
+ * number back to full), not a mistake to guard against.
+ */
+export async function addCentreCropCapacity(
+  centreId: string,
+  cropType: string,
+  dailyCapacityQuintals: number
+): Promise<void> {
+  const capacity: CentreCropCapacity = {
+    centreId,
+    cropType,
+    dailyCapacityQuintals,
+    remainingCapacityQuintals: dailyCapacityQuintals,
+  };
+  await setDoc(doc(db, COLLECTIONS.centreCropCapacity, `${centreId}_${cropType}`), capacity);
+}
+
+/**
+ * Admin-only manual increase to a (centre, crop) pair's remainingCapacityQuintals — e.g. head
+ * office authorizing more purchase for the day. Deliberately kept separate from the
+ * Accept-triggered decrement in submitQualityCheck(): per the feature spec, this stays a
+ * manual, deliberate action, never automatic. No broadcast notification on increase (see
+ * SlotBookingScreen/CentreSelectionScreen instead) — the live listeners below are enough for a
+ * farmer checking the Centre Selection screen to see the new number.
+ */
+export async function increaseCentreCropCapacity(
+  centreId: string,
+  cropType: string,
+  byQuintals: number
+): Promise<void> {
+  const capacityRef = doc(db, COLLECTIONS.centreCropCapacity, `${centreId}_${cropType}`);
   await runTransaction(db, async (tx) => {
-    const centreSnap = await tx.get(centreRef);
-    if (!centreSnap.exists()) throw new Error("Centre not found");
-    const centre = centreSnap.data() as Centre;
-    tx.update(centreRef, {
-      remainingCapacityQuintals: centre.remainingCapacityQuintals + byQuintals,
+    const snap = await tx.get(capacityRef);
+    if (!snap.exists()) throw new Error("Capacity not configured for this crop yet");
+    const capacity = snap.data() as CentreCropCapacity;
+    tx.update(capacityRef, {
+      remainingCapacityQuintals: capacity.remainingCapacityQuintals + byQuintals,
     });
   });
 }
 
+export interface CentreCropCapacityWithId extends CentreCropCapacity {
+  id: string;
+}
+
 /**
- * Live remainingCapacityQuintals per active centre, for the Centre Selection screen — same
- * onSnapshot-on-a-collection pattern as listenQueueForCentre()/listenAdminOverview() elsewhere
- * in this file, scoped to just this one field so a capacity change (from an Accept or an
- * admin's manual increase) shows up on the screen without the farmer needing to reload, while
- * leaving the rest of that screen's one-time distance/wait/hasSlots computation untouched.
+ * Live capacity rows for every (centre, crop) pair an admin has configured — the Admin
+ * Drilldown's capacity section groups these by centre.
  */
-export function listenActiveCentresCapacity(
+export function listenCentreCropCapacities(
+  onChange: (rows: CentreCropCapacityWithId[]) => void
+): Unsubscribe {
+  return onSnapshot(collection(db, COLLECTIONS.centreCropCapacity), (snap) => {
+    onChange(snap.docs.map((d) => ({ id: d.id, ...(d.data() as CentreCropCapacity) })));
+  });
+}
+
+/**
+ * Live remainingCapacityQuintals per centre, for one specific crop — the Centre Selection
+ * screen's farmer has already picked their crop by the time they reach this screen, so this
+ * only needs to watch that one crop across centres, same onSnapshot-on-a-collection pattern as
+ * listenQueueForCentre()/listenAdminOverview() elsewhere in this file. A centre with no
+ * document for this crop simply doesn't appear in the returned map — the screen treats that as
+ * "not capacity-gated," not "zero."
+ */
+export function listenCropCapacityAcrossCentres(
+  cropType: string,
   onChange: (remainingByCentreId: Record<string, number>) => void
 ): Unsubscribe {
-  const q = query(collection(db, COLLECTIONS.centres), where("status", "==", "active"));
+  const q = query(
+    collection(db, COLLECTIONS.centreCropCapacity),
+    where("cropType", "==", cropType)
+  );
   return onSnapshot(q, (snap) => {
     const remainingByCentreId: Record<string, number> = {};
     snap.docs.forEach((d) => {
-      remainingByCentreId[d.id] = (d.data() as Centre).remainingCapacityQuintals;
+      const data = d.data() as CentreCropCapacity;
+      remainingByCentreId[data.centreId] = data.remainingCapacityQuintals;
     });
     onChange(remainingByCentreId);
   });

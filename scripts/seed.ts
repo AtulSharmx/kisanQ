@@ -47,11 +47,6 @@ const today = new Date().toISOString().slice(0, 10);
 
 async function seed() {
   console.log("Seeding centres...");
-  // dailyCapacityQuintals/remainingCapacityQuintals: the real-world daily buying-capacity limit
-  // (Daily Buying Capacity feature) — a separate number from dailyCapacity above (which is a
-  // booking-count ceiling for the Admin Drilldown's utilization %). remainingCapacityQuintals
-  // starts equal to dailyCapacityQuintals (nothing bought yet today); submitQualityCheck()'s
-  // Accept step decrements it live, an admin can manually increase it.
   const centres = [
     {
       id: "centre-ksn",
@@ -59,8 +54,6 @@ async function seed() {
       district: "Karnal",
       location: { lat: 29.6857, lng: 76.9905 },
       dailyCapacity: 150,
-      dailyCapacityQuintals: 500,
-      remainingCapacityQuintals: 500,
       status: "active" as const,
       code: "KSN",
     },
@@ -70,8 +63,6 @@ async function seed() {
       district: "Panipat",
       location: { lat: 29.3909, lng: 76.9635 },
       dailyCapacity: 120,
-      dailyCapacityQuintals: 400,
-      remainingCapacityQuintals: 400,
       status: "active" as const,
       code: "PNP",
     },
@@ -81,8 +72,6 @@ async function seed() {
       district: "Sonipat",
       location: { lat: 28.9931, lng: 77.0151 },
       dailyCapacity: 100,
-      dailyCapacityQuintals: 300,
-      remainingCapacityQuintals: 300,
       status: "active" as const,
       code: "SNP",
     },
@@ -93,6 +82,27 @@ async function seed() {
       .collection("centres")
       .doc(id)
       .set({ ...centre, location: new GeoPoint(location.lat, location.lng) });
+  }
+
+  console.log("Seeding per-crop daily buying capacity (wheat, paddy — CLAUDE.md's MSP scope)...");
+  // Daily Buying Capacity feature — opt-in per (centre, crop) pair (see the type comment on
+  // CentreCropCapacity in src/types/firestore.ts). Only wheat/paddy are seeded here, matching
+  // CLAUDE.md's stated MSP scope; every other crop in the picker is simply not capacity-gated
+  // by default. remainingCapacityQuintals starts equal to dailyCapacityQuintals (nothing bought
+  // yet today); submitQualityCheck()'s Accept step decrements it live, an admin can manually
+  // increase it.
+  const cropCapacityDefs: Record<string, Record<string, number>> = {
+    "centre-ksn": { wheat: 500, paddy: 300 },
+    "centre-pnp": { wheat: 400, paddy: 250 },
+    "centre-snp": { wheat: 300, paddy: 200 },
+  };
+  for (const [centreId, byCrop] of Object.entries(cropCapacityDefs)) {
+    for (const [cropType, dailyCapacityQuintals] of Object.entries(byCrop)) {
+      await db
+        .collection("centreCropCapacity")
+        .doc(`${centreId}_${cropType}`)
+        .set({ centreId, cropType, dailyCapacityQuintals, remainingCapacityQuintals: dailyCapacityQuintals });
+    }
   }
 
   console.log("Seeding slots for today, tomorrow, and the day after (advance booking demo)...");

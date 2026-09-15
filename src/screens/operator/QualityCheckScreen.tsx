@@ -6,6 +6,7 @@ import type { OperatorStackParamList } from "../../navigation/operatorTypes";
 import { colors, fontSize, radius, shadow, spacing, touchTarget } from "../../theme";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { useLanguage } from "../../context/LanguageContext";
 import { submitQualityCheck } from "../../services/firestoreService";
 
 type Props = NativeStackScreenProps<OperatorStackParamList, "QualityCheck">;
@@ -23,6 +24,7 @@ const GRADES = ["A", "B", "C"];
 export function QualityCheckScreen({ route, navigation }: Props) {
   const { bookingId, queueId, farmerId, procurementId, expectedQuantity, actualWeight } =
     route.params;
+  const { t } = useLanguage();
   const [moisturePct, setMoisturePct] = useState(12);
   const [grade, setGrade] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
@@ -53,7 +55,7 @@ export function QualityCheckScreen({ route, navigation }: Props) {
       goBackToQueue();
     } catch (e) {
       console.error(e);
-      setError("सेव नहीं हुआ, दोबारा कोशिश करें। (Save failed, try again.)");
+      setError(t("saveFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -61,7 +63,7 @@ export function QualityCheckScreen({ route, navigation }: Props) {
 
   const askToConfirm = (decision: "accept" | "reject") => {
     if (!grade) {
-      setError("ग्रेड चुनें (Select a grade)");
+      setError(t("operatorSelectGradeError"));
       return;
     }
     setError(null);
@@ -71,16 +73,16 @@ export function QualityCheckScreen({ route, navigation }: Props) {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>गुणवत्ता जांच</Text>
+        <Text style={styles.headerTitle}>✅ {t("operatorQualityCheckTitle")}</Text>
       </View>
 
       <View style={styles.content}>
         <View style={styles.card}>
-          <Row label="अपेक्षित (Expected)" value={`${expectedQuantity} quintals`} />
-          <Row label="वास्तविक वज़न (Actual)" value={`${actualWeight} quintals`} />
+          <Row label={t("operatorExpectedQtyLabel")} value={`${expectedQuantity} quintals`} />
+          <Row label={t("operatorActualLabel")} value={`${actualWeight} quintals`} />
         </View>
 
-        <Text style={styles.label}>नमी % (Moisture %)</Text>
+        <Text style={styles.label}>{t("operatorMoistureLabel")}</Text>
         <View style={styles.stepper}>
           <Pressable
             style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}
@@ -97,7 +99,7 @@ export function QualityCheckScreen({ route, navigation }: Props) {
           </Pressable>
         </View>
 
-        <Text style={styles.label}>ग्रेड (Grade)</Text>
+        <Text style={styles.label}>{t("operatorGradeLabel")}</Text>
         <View style={styles.gradeRow}>
           {GRADES.map((g) => (
             <Pressable
@@ -110,13 +112,14 @@ export function QualityCheckScreen({ route, navigation }: Props) {
               ]}
             >
               <Text style={[styles.gradeChipText, grade === g && styles.gradeChipTextActive]}>
+                {grade === g ? "✓ " : ""}
                 {g}
               </Text>
             </Pressable>
           ))}
         </View>
 
-        <Text style={styles.label}>अस्वीकृति का कारण, यदि हो (Rejection reason, if any)</Text>
+        <Text style={styles.label}>{t("operatorRejectionReasonLabel")}</Text>
         <TextInput
           value={rejectionReason}
           onChangeText={setRejectionReason}
@@ -129,13 +132,13 @@ export function QualityCheckScreen({ route, navigation }: Props) {
 
         <View style={styles.spacer} />
         <PrimaryButton
-          label="स्वीकार करें (Accept)"
+          label={`✅ ${t("operatorAcceptBtn")}`}
           onPress={() => askToConfirm("accept")}
           loading={submitting}
         />
         <View style={styles.spacerSmall} />
         <PrimaryButton
-          label="अस्वीकार करें (Reject)"
+          label={`❌ ${t("operatorRejectBtn")}`}
           onPress={() => askToConfirm("reject")}
           loading={submitting}
           variant="danger"
@@ -146,11 +149,13 @@ export function QualityCheckScreen({ route, navigation }: Props) {
         visible={pendingDecision !== null}
         title={
           pendingDecision === "accept"
-            ? "क्या आप वाकई इस फसल को स्वीकार करना चाहते हैं?"
-            : "क्या आप वाकई इस फसल को अस्वीकार करना चाहते हैं?"
+            ? t("operatorAcceptConfirmTitle")
+            : t("operatorRejectConfirmTitle")
         }
-        confirmLabel={pendingDecision === "accept" ? "हाँ, स्वीकार करें" : "हाँ, अस्वीकार करें"}
-        cancelLabel="नहीं"
+        confirmLabel={
+          pendingDecision === "accept" ? t("operatorAcceptConfirmYes") : t("operatorRejectConfirmYes")
+        }
+        cancelLabel={t("cancelConfirmNo")}
         destructive={pendingDecision === "reject"}
         onCancel={() => setPendingDecision(null)}
         onConfirm={() => {
@@ -180,7 +185,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     backgroundColor: colors.surface,
   },
-  headerTitle: { fontSize: fontSize.label, fontWeight: "800", color: colors.text },
+  headerTitle: { fontSize: fontSize.label, fontWeight: "800", color: colors.primary },
   content: { padding: spacing.lg, maxWidth: 480, width: "100%", alignSelf: "center", gap: spacing.md },
   card: {
     backgroundColor: colors.surface,

@@ -35,6 +35,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     ...shadow.fab,
+    // See the note in HelpFab.tsx — elevation is Android's stacking order, not just a shadow.
+    elevation: 8,
+    zIndex: 10,
   },
   icon: { fontSize: 24 },
   pressed: { opacity: 0.7 },

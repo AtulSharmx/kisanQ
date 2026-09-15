@@ -9,6 +9,9 @@ import { useFarmer } from "../../context/FarmerContext";
 import { ScreenContainer } from "../../components/ScreenContainer";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { PHOTO_CREDITS, PHOTO_SOURCE } from "../../data/photoCredits";
+import { commodityLabelFor } from "../../data/commodities";
+import { useCommodities } from "../../hooks/useCommodities";
 import type { Lang } from "../../i18n/strings";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
@@ -50,6 +53,7 @@ const LANGUAGES: {
 export function SettingsScreen({ navigation }: Props) {
   const { t, lang, setLang } = useLanguage();
   const { logout } = useFarmer();
+  const { commodities } = useCommodities();
   const [confirmingLogout, setConfirmingLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -81,6 +85,17 @@ export function SettingsScreen({ navigation }: Props) {
               {t(option.labelKey)}
             </Text>
           </Pressable>
+        ))}
+      </View>
+
+      <Text style={styles.sectionLabel}>{t("photoCreditsLabel")}</Text>
+      <View style={styles.creditsCard}>
+        <Text style={styles.creditsSource}>{PHOTO_SOURCE}</Text>
+        {PHOTO_CREDITS.map((credit) => (
+          <Text key={credit.cropKey} style={styles.creditsRow}>
+            {commodityLabelFor(credit.cropKey, commodities, lang)} — {credit.photographer} ·{" "}
+            {credit.licence}
+          </Text>
         ))}
       </View>
 
@@ -126,6 +141,21 @@ const styles = StyleSheet.create({
   },
   langRowActive: { backgroundColor: colors.primaryTint },
   langRowText: { fontSize: fontSize.label, fontWeight: "700", color: colors.text },
+  creditsCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  creditsSource: {
+    fontSize: fontSize.body,
+    fontWeight: "700",
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  creditsRow: { fontSize: fontSize.body - 2, color: colors.textMuted, lineHeight: 22 },
   spacer: { height: spacing.md },
   pressed: { opacity: 0.7 },
 });

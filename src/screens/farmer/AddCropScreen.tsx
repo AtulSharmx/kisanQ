@@ -8,6 +8,7 @@ import { ScreenContainer } from "../../components/ScreenContainer";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { commodityLabel } from "../../data/commodities";
 import { useCommodities } from "../../hooks/useCommodities";
+import { CropThumb } from "../../components/CropThumb";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddCrop">;
 
@@ -52,7 +53,7 @@ export function AddCropScreen({ navigation }: Props) {
               pressed && styles.pressed,
             ]}
           >
-            <Text style={styles.cropIcon}>{c.icon}</Text>
+            <CropThumb cropKey={c.key} icon={c.icon} />
             <Text style={styles.cropLabel}>
               {cropType === c.key ? "✓ " : ""}
               {commodityLabel(c, lang)}
@@ -116,9 +117,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.xs,
+    paddingVertical: spacing.md,
   },
   cropCardActive: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
-  cropIcon: { fontSize: 32 },
   cropLabel: { fontSize: fontSize.body, fontWeight: "700", color: colors.text },
   label: { fontSize: fontSize.body, color: colors.textMuted, marginBottom: spacing.sm },
   stepper: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.lg },

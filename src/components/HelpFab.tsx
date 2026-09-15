@@ -43,6 +43,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     ...shadow.fab,
+    // shadow.fab's elevation (4) is a *depth* cue, and on Android it doubles as the stacking
+    // order — a raised card further down the tree can end up painted over the FAB even though
+    // the FAB comes later in the JSX. Pin both FABs above anything a screen renders so "visible
+    // on every screen" holds however a screen is built.
+    elevation: 8,
+    zIndex: 10,
   },
   icon: { fontSize: 24 },
   pressed: { opacity: 0.7 },

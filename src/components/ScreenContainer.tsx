@@ -33,6 +33,12 @@ interface Props {
  */
 export function ScreenContainer({ children, scroll = true, showHome = true, showHelp = true }: Props) {
   const topPadding = showHome ? touchTarget + spacing.lg : spacing.lg;
+  // The Help FAB floats over the bottom-right corner (bottom: 20, height: touchTarget), so a
+  // screen whose last element is a full-width action button — Continue, Book Slot, Save — had its
+  // right edge sitting underneath it: a tap there hit the dialer instead of the button, and the
+  // FAB itself read as "part of the button" rather than a separate control. Reserve the strip it
+  // occupies whenever it's shown, rather than asking every screen to remember its own spacer.
+  const bottomPadding = showHelp ? touchTarget + spacing.lg + spacing.md : spacing.xl;
 
   if (scroll) {
     return (
@@ -43,7 +49,10 @@ export function ScreenContainer({ children, scroll = true, showHome = true, show
         >
           <ScrollView
             style={styles.flex}
-            contentContainerStyle={[styles.scrollContent, { paddingTop: topPadding }]}
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingTop: topPadding, paddingBottom: bottomPadding },
+            ]}
           >
             {children}
           </ScrollView>
@@ -57,7 +66,7 @@ export function ScreenContainer({ children, scroll = true, showHome = true, show
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <KeyboardAvoidingView
-        style={[styles.flex, styles.content, { paddingTop: topPadding }]}
+        style={[styles.flex, styles.content, { paddingTop: topPadding, paddingBottom: bottomPadding }]}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         {children}
@@ -71,6 +80,6 @@ export function ScreenContainer({ children, scroll = true, showHome = true, show
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
-  scrollContent: { padding: spacing.lg, paddingBottom: spacing.xl * 2, flexGrow: 1 },
+  scrollContent: { padding: spacing.lg, flexGrow: 1 },
   content: { flex: 1, padding: spacing.lg },
 });

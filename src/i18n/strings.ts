@@ -693,6 +693,15 @@ export const strings = {
     gu: "ભાષા બદલો", te: "భాషను మార్చండి", ta: "மொழியை மாற்றவும்", kn: "ಭಾಷೆ ಬದಲಾಯಿಸಿ", ml: "ഭാഷ മാറ്റുക",
     or: "ଭାଷା ବଦଳାନ୍ତୁ", ur: "زبان تبدیل کریں",
   },
+  // Attribution for the bundled crop photographs. Required by their CC BY / CC BY-SA licences
+  // wherever the app is distributed, so it has to live in the app itself, not only in the repo —
+  // see src/data/photoCredits.ts and assets/crops/CREDITS.md.
+  photoCreditsLabel: {
+    hi: "फ़सल फ़ोटो के स्रोत", en: "Crop photo credits", pa: "ਫ਼ਸਲ ਫ਼ੋਟੋ ਦੇ ਸਰੋਤ",
+    bn: "ফসলের ছবির কৃতিত্ব", mr: "पीक फोटोंचे श्रेय", gu: "પાક ફોટોના શ્રેય",
+    te: "పంట ఫోటోల మూలాలు", ta: "பயிர் புகைப்பட நன்றி", kn: "ಬೆಳೆ ಫೋಟೋಗಳ ಕೃಪೆ",
+    ml: "വിള ചിത്രങ്ങളുടെ കടപ്പാട്", or: "ଫସଲ ଫଟୋର ସ୍ୱୀକୃତି", ur: "فصل کی تصاویر کے حوالے",
+  },
   logoutBtn: {
     hi: "लॉग आउट", en: "Log out", pa: "ਲੌਗ ਆਊਟ", bn: "লগ আউট", mr: "लॉग आउट", gu: "લોગ આઉટ",
     te: "లాగ్ అవుట్", ta: "வெளியேறு", kn: "ಲಾಗ್ ಔಟ್", ml: "ലോഗ് ഔട്ട്", or: "ଲଗଆଉଟ", ur: "لاگ آؤٹ",

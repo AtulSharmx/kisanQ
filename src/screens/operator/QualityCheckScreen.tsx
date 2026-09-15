@@ -6,7 +6,9 @@ import type { OperatorStackParamList } from "../../navigation/operatorTypes";
 import { colors, fontSize, radius, shadow, spacing, touchTarget } from "../../theme";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { OperatorHeader } from "../../components/OperatorHeader";
 import { useLanguage } from "../../context/LanguageContext";
+import { useOperator } from "../../context/OperatorContext";
 import { GRADES } from "../../data/grades";
 import { commodityUnitFor, unitLabel } from "../../data/commodities";
 import { useCommodities } from "../../hooks/useCommodities";
@@ -38,6 +40,7 @@ export function QualityCheckScreen({ route, navigation }: Props) {
     cropType,
   } = route.params;
   const { t, lang } = useLanguage();
+  const { staffName } = useOperator();
   const { commodities } = useCommodities();
   const [moisturePct, setMoisturePct] = useState(12);
   const [grade, setGrade] = useState<string | null>(null);
@@ -129,9 +132,19 @@ export function QualityCheckScreen({ route, navigation }: Props) {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>✅ {t("operatorQualityCheckTitle")}</Text>
-      </View>
+      <OperatorHeader
+        title={`✅ ${t("operatorQualityCheckTitle")}`}
+        staffName={staffName}
+        actions={[
+          {
+            icon: "←",
+            label: t("operatorBackToQueue"),
+            // Safe to leave: the lot is already weighed and recorded, and the quality decision
+            // isn't written until Accept/Reject, so backing out just re-opens it from the queue.
+            onPress: goBackToQueue,
+          },
+        ]}
+      />
 
       <View style={styles.content}>
         <View style={styles.card}>
@@ -259,13 +272,6 @@ function Row({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  header: {
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  headerTitle: { fontSize: fontSize.label, fontWeight: "800", color: colors.primary },
   content: { padding: spacing.lg, maxWidth: 480, width: "100%", alignSelf: "center", gap: spacing.md },
   card: {
     backgroundColor: colors.surface,

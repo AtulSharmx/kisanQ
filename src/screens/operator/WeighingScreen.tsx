@@ -4,6 +4,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { OperatorStackParamList } from "../../navigation/operatorTypes";
 import { colors, fontSize, radius, shadow, spacing } from "../../theme";
 import { PrimaryButton } from "../../components/PrimaryButton";
+import { OperatorHeader } from "../../components/OperatorHeader";
 import { useLanguage } from "../../context/LanguageContext";
 import { useOperator } from "../../context/OperatorContext";
 import {
@@ -80,11 +81,19 @@ export function WeighingScreen({ route, navigation }: Props) {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>
-          ⚖️ {t("operatorWeighingTitle")} ({staffName})
-        </Text>
-      </View>
+      <OperatorHeader
+        title={`⚖️ ${t("operatorWeighingTitle")}`}
+        staffName={staffName}
+        actions={[
+          {
+            icon: "←",
+            label: t("operatorBackToQueue"),
+            // Abandoning a weighing is non-destructive — nothing is written until Confirm — so
+            // this just pops back to the queue the same way the browser's Back button now does.
+            onPress: () => navigation.navigate("LiveQueueManagement"),
+          },
+        ]}
+      />
 
       <View style={styles.content}>
         <View style={styles.card}>
@@ -132,13 +141,6 @@ function Row({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   loader: { marginTop: spacing.xl },
-  header: {
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  headerTitle: { fontSize: fontSize.label, fontWeight: "800", color: colors.primary },
   content: { padding: spacing.lg, maxWidth: 480, width: "100%", alignSelf: "center", gap: spacing.md },
   card: {
     backgroundColor: colors.surface,

@@ -18,13 +18,13 @@ No local setup needed to try it — both surfaces are deployed against the real 
 | Surface | Link |
 |---|---|
 | **Operator / Admin** (web) | **[kisanq-farmer.web.app](https://kisanq-farmer.web.app)** |
-| **Farmer app** (Android) | **[Download APK](https://expo.dev/accounts/atulshxrma/projects/kisanq/builds/a401fcbf-3bb7-43f4-b18c-b9323d5b643a)** — open the link on an Android phone (or scan its QR code) and tap Install. No Play Store, no Expo account needed. |
+| **Farmer app** (Android) | **[Download APK](https://expo.dev/accounts/atulshxrma/projects/kisanq/builds/1e213b10-c8b1-4f13-887d-1fdda694b2ea)** — open the link on an Android phone (or scan its QR code) and tap Install. No Play Store, no Expo account needed. |
 
 See [Demo credentials](#demo-credentials) below for the Staff ID/PIN to log into Operator/Admin.
 Farmers register through the app itself (any 12-digit Aadhaar, OTP shown on-screen).
 
 > **Note:** the Android build link is an EAS internal-distribution artifact, which expires
-> ~14 days after it was built (2026-09-13). If it's gone stale, rebuild it with
+> ~14 days after it was built (2026-09-15). If it's gone stale, rebuild it with
 > `eas build --platform android --profile preview` (see [`eas.json`](eas.json)) — everything
 > needed (Firebase config, keystore) is already configured on the EAS project.
 
@@ -60,26 +60,37 @@ One Firebase backend, three access surfaces built from a single Expo codebase:
 ## Features
 
 **Farmer App**
-- Bilingual (Hindi default), village-first UI — icon pickers and steppers over free text, large
-  touch targets, high contrast for outdoor sunlight
+- 12 languages (Hindi, English, Punjabi, Bengali, Marathi, Gujarati, Telugu, Tamil, Kannada,
+  Malayalam, Odia, Urdu) — the very first screen keeps it to Hindi/English for a farmer's first
+  ever open, the full list lives in Settings
+- Village-first UI — icon pickers and steppers over free text, large touch targets, high contrast
+  for outdoor sunlight
 - Aadhaar + OTP registration (mocked for the prototype) with a biometric-fallback path
-- Centre selection ranked by live estimated wait, not just distance
-- Digital token with QR code, shareable via WhatsApp
+- Advance booking — book a slot for today, tomorrow, or the day after, not just same-day
+- Centre selection ranked by live estimated wait, not just distance, showing each centre's live
+  remaining daily buying capacity for the crop being booked
+- **Express slot** — a fixed-fee, capped-quota priority option (Tatkal-style, never an open
+  bidding war) for a farmer who needs to skip ahead
+- Digital token with QR code, shareable via WhatsApp; cancel a not-yet-checked-in booking any time
 - **Live Queue** — "X people ahead of you," computed live from the centre's actual queue state,
   not a number frozen at check-in
 - **Procurement Status tracker** — Booked → Arrived → Weighed → Quality-checked → Accepted →
   Payment, ticking in real time as the operator works
+- Real-time in-app Notifications for every stage change
 
 **Operator Console**
-- Staff ID + PIN login, scoped to one procurement centre
+- Staff ID + PIN login, scoped to one procurement centre, with its own Settings (language + logout)
 - QR scan check-in with an always-visible manual token-entry fallback
 - Live queue management (Waiting / Processing / Completed) with one-tap "Call Next"
 - Weighing (expected vs. actual) and quality check (moisture %, grade, Accept/Reject with a
   confirm step) — both push an instant notification to the farmer
 
 **Admin Dashboard**
-- Centre/farmer/booking overview counters
+- Centre/farmer/booking overview counters, with its own Settings (language + logout)
 - District → centre drill-down with capacity-utilization flagging for overloaded centres
+- **Daily Buying Capacity** — set a daily quintal limit per centre *per crop* (a mandi can be
+  buying more than one crop the same day), auto-decremented the moment a booking is Accepted, with
+  a manual top-up control for a deliberate policy increase
 
 ## Tech stack
 

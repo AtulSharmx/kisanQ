@@ -85,6 +85,9 @@ export function SlotBookingScreen({ route, navigation }: Props) {
         slotId: selected,
         cropId,
         cropType: crop.cropType,
+        // Lets the capacity gate reject a load that's bigger than what's left for *this*
+        // commodity today, instead of only refusing once the centre hits exactly zero.
+        expectedQuantity: crop.expectedQuantity,
         wantsExpress,
       });
       navigation.replace("Token", { bookingId: result.bookingId });
@@ -97,6 +100,11 @@ export function SlotBookingScreen({ route, navigation }: Props) {
         setError(t("slotJustFilled"));
       } else if (e instanceof Error && e.message === "CENTRE_CAPACITY_FULL") {
         setError(t("centreCapacityFull"));
+      } else if (e instanceof Error && e.message.startsWith("CENTRE_CAPACITY_INSUFFICIENT:")) {
+        // The code carries the remaining quintals after the colon — telling the farmer the real
+        // number is the difference between "try something else" and "bring 40 instead of 60."
+        const remaining = e.message.split(":")[1];
+        setError(t("centreCapacityInsufficient").replace("{n}", remaining));
       } else if (e instanceof Error && e.message === "EXPRESS_SOLD_OUT") {
         setError(t("expressSoldOut"));
         setWantsExpress(false);

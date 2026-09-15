@@ -6,7 +6,8 @@ import { colors, fontSize, radius, spacing, touchTarget } from "../../theme";
 import { useLanguage } from "../../context/LanguageContext";
 import { ScreenContainer } from "../../components/ScreenContainer";
 import { PrimaryButton } from "../../components/PrimaryButton";
-import { CROPS } from "../../data/crops";
+import { commodityLabel } from "../../data/commodities";
+import { useCommodities } from "../../hooks/useCommodities";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddCrop">;
 
@@ -17,6 +18,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "AddCrop">;
  */
 export function AddCropScreen({ navigation }: Props) {
   const { t, lang } = useLanguage();
+  const { commodities } = useCommodities();
   const [cropType, setCropType] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(20);
   const [quantityText, setQuantityText] = useState("20");
@@ -40,7 +42,7 @@ export function AddCropScreen({ navigation }: Props) {
       <Text style={styles.title}>{t("addCropTitle")}</Text>
 
       <View style={styles.cropGrid}>
-        {CROPS.map((c) => (
+        {commodities.map((c) => (
           <Pressable
             key={c.key}
             onPress={() => setCropType(c.key)}
@@ -53,7 +55,7 @@ export function AddCropScreen({ navigation }: Props) {
             <Text style={styles.cropIcon}>{c.icon}</Text>
             <Text style={styles.cropLabel}>
               {cropType === c.key ? "✓ " : ""}
-              {c.labels[lang]}
+              {commodityLabel(c, lang)}
             </Text>
           </Pressable>
         ))}

@@ -96,6 +96,18 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /commodities/{commodityId} {
+      // The runtime commodity master. Read-open for the same reason centres/ is: the farmer's
+      // crop picker is reached before a farmer means anything as an identity, and this list is
+      // public policy information, not anyone's data. Only an admin adds or edits a commodity
+      // (Admin Settings), and there is deliberately no delete path — a commodity is deactivated
+      // rather than removed, since bookings, capacity rows and procurement records key on its
+      // id and would be left dangling.
+      allow read: if true;
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
     match /centreCropCapacity/{capacityId} {
       // Daily Buying Capacity feature, tracked per crop per centre (a mandi can legitimately be
       // buying more than one crop the same day) — same read-openness reasoning as centres/
@@ -193,10 +205,16 @@ service cloud.firestore {
     match /payments/{paymentId} {
       // Relaxed to isSignedIn() for read — see the get()-in-list-queries note above. The
       // farmer's Procurement Status screen queries this collection by procurementId in real
-      // time (onSnapshot) for the "Payment" tick — nothing writes here yet (payment
-      // simulation isn't part of the build order steps done so far).
+      // time (onSnapshot) for the "Payment" tick.
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      // Create is open to any staff, not just admin: submitQualityCheck() raises the
+      // *simulated* payment doc inside the operator's own quality-check transaction, so the
+      // amount reaches the farmer's tracker at the same instant as the grade and rate. No real
+      // money moves (CLAUDE.md rule 6) — the doc is written with status "processing".
+      // Update/delete stay admin-only so an operator can't retroactively rewrite an amount
+      // after the farmer has seen it, which is exactly the fraud the tracker exists to expose.
+      allow create: if isStaff();
+      allow update, delete: if isAdmin();
     }
 
     match /notifications/{notificationId} {

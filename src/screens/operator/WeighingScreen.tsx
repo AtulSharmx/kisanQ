@@ -59,6 +59,8 @@ export function WeighingScreen({ route, navigation }: Props) {
         procurementId,
         expectedQuantity: crop?.expectedQuantity ?? 0,
         actualWeight: weight,
+        centreId: booking?.centreId ?? "",
+        cropType: booking?.cropType ?? crop?.cropType ?? "",
       });
     } catch (e) {
       console.error(e);

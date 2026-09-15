@@ -138,6 +138,13 @@ export function ProcurementStatusScreen({ navigation }: Props) {
       {qualityChecked && procurement?.grade && (
         <Text style={styles.detail}>गुणवत्ता जांच पूरी — ग्रेड: {procurement.grade}।</Text>
       )}
+      {accepted && procurement?.pricePerUnit != null && procurement.actualWeight != null && (
+        <Text style={styles.detail}>
+          {t("procPriceDetail")
+            .replace("{rate}", String(procurement.pricePerUnit))
+            .replace("{amount}", String(Math.round(procurement.actualWeight * procurement.pricePerUnit)))}
+        </Text>
+      )}
     </ScreenContainer>
   );
 }

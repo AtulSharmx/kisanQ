@@ -13,12 +13,20 @@ import type { OperatorStackParamList } from "../../navigation/operatorTypes";
 import { colors, fontSize, radius, shadow, spacing, touchTarget } from "../../theme";
 import { useLanguage } from "../../context/LanguageContext";
 import { useOperator } from "../../context/OperatorContext";
-import { CROPS } from "../../data/crops";
+import {
+  commodityLabelFor,
+  commodityUnitFor,
+  unitLabel,
+  type CommodityOption,
+} from "../../data/commodities";
+import { GRADES } from "../../data/grades";
+import { useCommodities } from "../../hooks/useCommodities";
 import {
   addCentreCropCapacity,
   increaseCentreCropCapacity,
   listenAdminCentreBreakdown,
   listenCentreCropCapacities,
+  setCentreCropGradePrices,
   OVERLOAD_THRESHOLD_PCT,
   type CentreBreakdown,
   type CentreCropCapacityWithId,
@@ -37,6 +45,7 @@ type Props = NativeStackScreenProps<OperatorStackParamList, "AdminDrilldown">;
 export function AdminDrilldownScreen({ navigation }: Props) {
   const { t, lang } = useLanguage();
   const { staffName } = useOperator();
+  const { commodities } = useCommodities();
   const [rows, setRows] = useState<CentreBreakdown[] | null>(null);
   const [capacityRows, setCapacityRows] = useState<CentreCropCapacityWithId[]>([]);
 
@@ -117,6 +126,7 @@ export function AdminDrilldownScreen({ navigation }: Props) {
                   <CentreCapacitySection
                     centreId={row.centre.id}
                     capacities={capacityRows.filter((c) => c.centreId === row.centre.id)}
+                    commodities={commodities}
                     lang={lang}
                   />
                 </View>
@@ -142,31 +152,30 @@ export function AdminDrilldownScreen({ navigation }: Props) {
 function CentreCapacitySection({
   centreId,
   capacities,
+  commodities,
   lang,
 }: {
   centreId: string;
   capacities: CentreCropCapacityWithId[];
+  commodities: CommodityOption[];
   lang: Lang;
 }) {
   const { t } = useLanguage();
   return (
     <View style={styles.capacitySection}>
       {capacities.map((c) => (
-        <CapacityRow key={c.id} capacity={c} lang={lang} />
+        <CapacityRow key={c.id} capacity={c} commodities={commodities} lang={lang} />
       ))}
       <AddCapacityRow
         centreId={centreId}
         existingCropTypes={capacities.map((c) => c.cropType)}
+        commodities={commodities}
         lang={lang}
         setCapacityLabel={t("adminSetCapacityLabel")}
         addBtnLabel={t("adminAddBtn")}
       />
     </View>
   );
-}
-
-function cropLabel(cropType: string, lang: Lang): string {
-  return CROPS.find((c) => c.key === cropType)?.labels[lang] ?? cropType;
 }
 
 /**
@@ -176,7 +185,15 @@ function cropLabel(cropType: string, lang: Lang): string {
  * increase itself is the only change this row can make — an admin can't decrease it directly
  * here, matching the "manual increase only" spec.
  */
-function CapacityRow({ capacity, lang }: { capacity: CentreCropCapacityWithId; lang: Lang }) {
+function CapacityRow({
+  capacity,
+  commodities,
+  lang,
+}: {
+  capacity: CentreCropCapacityWithId;
+  commodities: CommodityOption[];
+  lang: Lang;
+}) {
   const { t } = useLanguage();
   const [amountText, setAmountText] = useState("");
   const [saving, setSaving] = useState(false);
@@ -201,24 +218,129 @@ function CapacityRow({ capacity, lang }: { capacity: CentreCropCapacityWithId; l
     }
   };
 
+  const commodity = commodities.find((c) => c.key === capacity.cropType);
+  const unit = commodityUnitFor(capacity.cropType, commodities);
+
   return (
-    <View style={styles.capacityRow}>
-      <Text style={styles.capacityText}>
-        🌾 {cropLabel(capacity.cropType, lang)} — {t("adminBuyingCapacityLabel")}:{" "}
-        {capacity.remainingCapacityQuintals} / {capacity.dailyCapacityQuintals}{" "}
-        {t("adminQtlRemaining")}
+    <View style={styles.capacityBlock}>
+      <View style={styles.capacityRow}>
+        <Text style={styles.capacityText}>
+          {commodity?.icon ?? "🌾"} {commodityLabelFor(capacity.cropType, commodities, lang)} —{" "}
+          {t("adminBuyingCapacityLabel")}: {capacity.remainingCapacityQuintals} /{" "}
+          {capacity.dailyCapacityQuintals} {t("adminQtlRemaining")}
+        </Text>
+        <View style={styles.capacityControls}>
+          <TextInput
+            value={amountText}
+            onChangeText={setAmountText}
+            keyboardType="numeric"
+            placeholder="+ qtl"
+            placeholderTextColor={colors.textMuted}
+            style={styles.capacityInput}
+          />
+          <Pressable
+            onPress={onIncrease}
+            disabled={saving}
+            style={({ pressed }) => [
+              styles.capacityBtn,
+              saving && styles.capacityBtnDisabled,
+              pressed && !saving && styles.pressed,
+            ]}
+          >
+            <Text style={styles.capacityBtnText}>{saving ? "..." : t("adminUpdateBtn")}</Text>
+          </Pressable>
+        </View>
+        {error && <Text style={styles.capacityError}>{error}</Text>}
+      </View>
+      <GradePriceRow
+        centreId={capacity.centreId}
+        cropType={capacity.cropType}
+        gradePrices={capacity.gradePrices}
+        unitText={unitLabel(unit, lang)}
+      />
+    </View>
+  );
+}
+
+/**
+ * What this centre pays, per grade, for this one commodity — one free-text ₹ field per grade in
+ * src/data/grades.ts. Deliberately typed rather than picked: the whole point of the feature is
+ * that a grade letter is *not* a price, so nothing here maps "A" to a hardcoded number. An empty
+ * field means "no rate published for this grade" (setCentreCropGradePrices drops it rather than
+ * writing 0), which is what the farmer's Centre Selection range and the operator's pre-fill both
+ * treat as "operator types it free-hand."
+ *
+ * Saved with a merge write onto the same {centreId}_{cropType} capacity doc, so it can never
+ * clobber remainingCapacityQuintals, which operators are decrementing concurrently.
+ */
+function GradePriceRow({
+  centreId,
+  cropType,
+  gradePrices,
+  unitText,
+}: {
+  centreId: string;
+  cropType: string;
+  gradePrices: Record<string, number> | undefined;
+  unitText: string;
+}) {
+  const { t } = useLanguage();
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // The live doc is the source of truth; `draft` only holds grades the admin has actually typed
+  // into this session, so another operator's concurrent capacity write doesn't wipe the edit in
+  // progress and a saved price doesn't need to be echoed back into local state.
+  const valueFor = (grade: string) =>
+    draft[grade] ?? (gradePrices?.[grade] != null ? String(gradePrices[grade]) : "");
+
+  const onSave = async () => {
+    const merged: Record<string, number> = {};
+    for (const grade of GRADES) {
+      const text = valueFor(grade).trim();
+      if (text === "") continue;
+      const price = Number(text);
+      if (!Number.isFinite(price) || price <= 0) {
+        setError(t("saveFailed"));
+        return;
+      }
+      merged[grade] = price;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await setCentreCropGradePrices(centreId, cropType, merged);
+      setDraft({});
+    } catch (e) {
+      console.error(e);
+      setError(t("saveFailed"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <View style={styles.gradePriceBlock}>
+      <Text style={styles.addCapacityLabel}>
+        {t("adminGradePriceLabel").replace("{unit}", unitText)}
       </Text>
-      <View style={styles.capacityControls}>
-        <TextInput
-          value={amountText}
-          onChangeText={setAmountText}
-          keyboardType="numeric"
-          placeholder="+ qtl"
-          placeholderTextColor={colors.textMuted}
-          style={styles.capacityInput}
-        />
+      <View style={styles.gradePriceRow}>
+        {GRADES.map((grade) => (
+          <View key={grade} style={styles.gradePriceField}>
+            <Text style={styles.gradePriceGrade}>{grade}</Text>
+            <TextInput
+              value={valueFor(grade)}
+              onChangeText={(text) => setDraft((d) => ({ ...d, [grade]: text }))}
+              keyboardType="numeric"
+              placeholder="₹"
+              placeholderTextColor={colors.textMuted}
+              style={styles.gradePriceInput}
+            />
+          </View>
+        ))}
         <Pressable
-          onPress={onIncrease}
+          onPress={onSave}
           disabled={saving}
           style={({ pressed }) => [
             styles.capacityBtn,
@@ -226,7 +348,7 @@ function CapacityRow({ capacity, lang }: { capacity: CentreCropCapacityWithId; l
             pressed && !saving && styles.pressed,
           ]}
         >
-          <Text style={styles.capacityBtnText}>{saving ? "..." : t("adminUpdateBtn")}</Text>
+          <Text style={styles.capacityBtnText}>{saving ? "..." : t("adminSavePricesBtn")}</Text>
         </Pressable>
       </View>
       {error && <Text style={styles.capacityError}>{error}</Text>}
@@ -244,12 +366,14 @@ function CapacityRow({ capacity, lang }: { capacity: CentreCropCapacityWithId; l
 function AddCapacityRow({
   centreId,
   existingCropTypes,
+  commodities,
   lang,
   setCapacityLabel,
   addBtnLabel,
 }: {
   centreId: string;
   existingCropTypes: string[];
+  commodities: CommodityOption[];
   lang: Lang;
   setCapacityLabel: string;
   addBtnLabel: string;
@@ -284,7 +408,7 @@ function AddCapacityRow({
     <View style={styles.addCapacityBlock}>
       <Text style={styles.addCapacityLabel}>{setCapacityLabel}</Text>
       <View style={styles.cropChipRow}>
-        {CROPS.map((c) => (
+        {commodities.map((c) => (
           <Pressable
             key={c.key}
             onPress={() => setSelectedCrop(c.key)}
@@ -295,7 +419,8 @@ function AddCapacityRow({
             ]}
           >
             <Text style={[styles.cropChipText, selectedCrop === c.key && styles.cropChipTextActive]}>
-              {c.labels[lang]}
+              {selectedCrop === c.key ? "✓ " : ""}
+              {commodityLabelFor(c.key, commodities, lang)}
               {existingCropTypes.includes(c.key) ? " •" : ""}
             </Text>
           </Pressable>
@@ -392,6 +517,22 @@ const styles = StyleSheet.create({
     ...shadow.card,
   },
   capacitySection: { gap: spacing.sm },
+  capacityBlock: { gap: spacing.xs },
+  gradePriceBlock: { gap: spacing.xs, paddingLeft: spacing.md },
+  gradePriceRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: spacing.sm },
+  gradePriceField: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  gradePriceGrade: { fontSize: fontSize.body, fontWeight: "800", color: colors.text },
+  gradePriceInput: {
+    width: 80,
+    minHeight: 40,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    fontSize: fontSize.body,
+    backgroundColor: colors.surface,
+    color: colors.text,
+  },
   capacityRow: {
     flexDirection: "row",
     flexWrap: "wrap",

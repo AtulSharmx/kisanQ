@@ -26,6 +26,7 @@ import type {
   Booking,
   Centre,
   CentreCropCapacity,
+  Commodity,
   Crop,
   Farmer,
   IdentityVerification,
@@ -152,6 +153,76 @@ export async function listCropsForFarmer(farmerId: string): Promise<CropWithId[]
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Crop) }));
 }
 
+// ---------------------------------------------------------------------------
+// Commodity master (the runtime replacement for the compile-time crop list)
+// ---------------------------------------------------------------------------
+
+export interface CommodityWithId extends Commodity {
+  id: string;
+}
+
+/**
+ * Live commodity table. Everything that lets a farmer pick a commodity, an admin assign one a
+ * capacity, or an operator price one reads through this (via useCommodities()), so an admin
+ * adding a row here shows up across the app within the same second — no rebuild, no deploy.
+ *
+ * Deliberately unfiltered rather than `where("active","==",true)`: the Admin Settings screen
+ * needs to see deactivated commodities in order to reactivate them, and callers that only want
+ * the sellable ones filter on `active` themselves. At this collection's size (tens of rows, not
+ * thousands) that's cheaper than maintaining two listeners.
+ */
+export function listenCommodities(
+  onChange: (rows: CommodityWithId[]) => void
+): Unsubscribe {
+  return onSnapshot(collection(db, COLLECTIONS.commodities), (snap) => {
+    onChange(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Commodity) })));
+  });
+}
+
+/**
+ * Admin-only: adds (or edits) one commodity. The doc id is the commodity *key* — the same string
+ * that becomes `Crop.cropType`/`Booking.cropType` and the second half of a capacity doc id — so
+ * it's normalised to a lowercase, no-spaces slug here rather than being whatever the admin
+ * typed. `setDoc` with merge:false is intentional: re-adding an existing key is how an admin
+ * renames a commodity or changes its unit, which is a legitimate action, not a collision.
+ */
+export async function upsertCommodity(input: {
+  key: string;
+  name: string;
+  icon: string;
+  unit: Commodity["unit"];
+  active?: boolean;
+}): Promise<string> {
+  const key = commodityKeyFromName(input.key);
+  if (!key) throw new Error("INVALID_COMMODITY_KEY");
+  const commodity: Commodity = {
+    name: input.name.trim(),
+    icon: input.icon || "🌾",
+    unit: input.unit,
+    active: input.active ?? true,
+  };
+  await setDoc(doc(db, COLLECTIONS.commodities, key), commodity);
+  return key;
+}
+
+/** Admin-only: hides a commodity from the pickers without deleting the capacity/booking history
+ *  that already references its key — deleting the row outright would orphan those. */
+export async function setCommodityActive(key: string, active: boolean): Promise<void> {
+  await setDoc(doc(db, COLLECTIONS.commodities, key), { active }, { merge: true });
+}
+
+/**
+ * "Kala Chana" -> "kala_chana". Firestore doc ids may not contain "/" and our capacity doc ids
+ * join on "_", so a key containing either would silently produce an unparseable id later.
+ */
+export function commodityKeyFromName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
 export interface CentreWithId extends Centre {
   id: string;
 }
@@ -257,6 +328,10 @@ export interface CreateBookingInput {
    * has this loaded (it's the crop the farmer picked earlier in the flow), so no extra
    * transaction read is needed just to get it. */
   cropType: string;
+  /** How much the farmer intends to bring, so the capacity gate can reject a booking that would
+   * *overshoot* the commodity's remaining capacity rather than only one that arrives after it
+   * already hit zero. Omitted = fall back to the zero-check alone. */
+  expectedQuantity?: number;
   /** Opt into an Express (Tatkal-style) slot, if one of the EXPRESS_QUOTA_PER_DAY is still
    * available for this slot's date — see getExpressAvailability(). */
   wantsExpress?: boolean;
@@ -312,12 +387,25 @@ export async function createBooking(
     // it). Only gates *new* bookings; an already-confirmed booking that's mid-queue when
     // capacity runs out is deliberately left alone — see the CENTRE_CAPACITY_FULL handling in
     // SlotBookingScreen.
+    //
+    // The gate is strictly per-commodity: it reads only this (centre, commodity) pair's own
+    // document, so wheat running out has no effect whatsoever on a paddy booking at the same
+    // centre on the same day. There is no shared pool.
     if (capacitySnap.exists()) {
       const capacity = capacitySnap.data() as CentreCropCapacity;
-      if (slot.date === today && capacity.remainingCapacityQuintals <= 0) {
-        // Stable error code, same pattern as SLOT_FULL/EXPRESS_SOLD_OUT below — the screen maps
-        // this to a translated message rather than showing raw English.
-        throw new Error("CENTRE_CAPACITY_FULL");
+      if (slot.date === today) {
+        const remaining = capacity.remainingCapacityQuintals;
+        if (remaining <= 0) {
+          // Stable error code, same pattern as SLOT_FULL/EXPRESS_SOLD_OUT below — the screen maps
+          // this to a translated message rather than showing raw English.
+          throw new Error("CENTRE_CAPACITY_FULL");
+        }
+        if (input.expectedQuantity != null && input.expectedQuantity > remaining) {
+          // Distinct from CENTRE_CAPACITY_FULL: there *is* capacity left, just not enough for
+          // this load. Worth its own code so the farmer can be told how much is actually left
+          // and book a smaller quantity or another centre, instead of being told "closed."
+          throw new Error(`CENTRE_CAPACITY_INSUFFICIENT:${remaining}`);
+        }
       }
     }
 
@@ -370,6 +458,10 @@ export async function createBooking(
       centreId: input.centreId,
       slotId: input.slotId,
       cropId: input.cropId,
+      // Denormalized from the crop doc so every later consumer (quality check's capacity
+      // decrement, the operator's queue rows) can tell which commodity's capacity this booking
+      // draws down without a second read — this is the spec's `commodity_id` on the booking.
+      cropType: input.cropType,
       tokenNumber: token,
       status: "booked",
       ...(isExpress ? { isExpress, expressFeePaid } : {}),
@@ -726,6 +818,7 @@ export async function recordWeighing(input: {
       qualityStatus: "pending",
       moisturePct: null,
       grade: null,
+      pricePerUnit: null,
       procurementStatus: "weighed",
     };
     tx.set(procurementRef, procurement);
@@ -751,6 +844,12 @@ export interface QualityCheckInput {
   farmerId: string;
   moisturePct: number;
   grade: string;
+  /**
+   * ₹ per unit the operator is paying for this lot. Pre-filled on the screen from the centre's
+   * configured price for the chosen grade, but always the operator's own typed number by the
+   * time it reaches here — the rate is never inferred from the grade letter.
+   */
+  pricePerUnit: number;
   decision: "accept" | "reject";
   rejectionReason?: string;
   /** Needed to decrement this (centre, crop) pair's remainingCapacityQuintals on Accept —
@@ -776,13 +875,23 @@ export interface QualityCheckInput {
  * weighed and is being bought regardless) — the feature's actual constraint is on *new*
  * bookings (see createBooking()'s CENTRE_CAPACITY_FULL check), not on a farmer already this far
  * into the process.
+ *
+ * On Accept this also records the agreed rate (`pricePerUnit`) and raises the *simulated*
+ * payment document for `actualWeight x pricePerUnit` — CLAUDE.md rule 6: no real money moves,
+ * ever, and no payment gateway is contacted. It's created with status "processing" rather than
+ * "completed" because that is the honest state: in real MSP procurement the money reaches the
+ * farmer's account days later, and claiming otherwise on the Procurement Status tracker would
+ * undercut the transparency the tracker exists for.
  */
 export async function submitQualityCheck(input: QualityCheckInput): Promise<void> {
   const procurementRef = doc(db, COLLECTIONS.procurement, input.procurementId);
   const bookingRef = doc(db, COLLECTIONS.bookings, input.bookingId);
   const queueRef = doc(db, COLLECTIONS.queue, input.queueId);
   const notificationRef = doc(collection(db, COLLECTIONS.notifications));
+  const paymentRef = doc(collection(db, COLLECTIONS.payments));
+  const paymentNotificationRef = doc(collection(db, COLLECTIONS.notifications));
   const accepted = input.decision === "accept";
+  const payableAmount = Math.round(input.actualWeight * input.pricePerUnit);
 
   await runTransaction(db, async (tx) => {
     // All reads (across every branch) must happen before any writes below, per Firestore
@@ -794,13 +903,18 @@ export async function submitQualityCheck(input: QualityCheckInput): Promise<void
       const bookingSnap = await tx.get(bookingRef);
       if (!bookingSnap.exists()) throw new Error("Booking not found");
       const booking = bookingSnap.data() as Booking;
-      const cropSnap = await tx.get(doc(db, COLLECTIONS.crops, booking.cropId));
-      if (cropSnap.exists()) {
-        const crop = cropSnap.data() as Crop;
+      // Bookings created since the commodity work carry their own cropType; older ones don't, so
+      // fall back to the crop doc rather than skipping the capacity decrement for them.
+      let cropType = booking.cropType;
+      if (!cropType) {
+        const cropSnap = await tx.get(doc(db, COLLECTIONS.crops, booking.cropId));
+        if (cropSnap.exists()) cropType = (cropSnap.data() as Crop).cropType;
+      }
+      if (cropType) {
         capacityRef = doc(
           db,
           COLLECTIONS.centreCropCapacity,
-          `${booking.centreId}_${crop.cropType}`
+          `${booking.centreId}_${cropType}`
         );
         const capacitySnap = await tx.get(capacityRef);
         if (capacitySnap.exists()) capacity = capacitySnap.data() as CentreCropCapacity;
@@ -810,6 +924,8 @@ export async function submitQualityCheck(input: QualityCheckInput): Promise<void
     tx.update(procurementRef, {
       moisturePct: input.moisturePct,
       grade: input.grade,
+      // Null on a rejection: nothing was bought, so there is no rate to record.
+      pricePerUnit: accepted ? input.pricePerUnit : null,
       qualityStatus: accepted ? "accepted" : "rejected",
       procurementStatus: accepted ? "completed" : "rejected",
       ...(input.rejectionReason ? { rejectionReason: input.rejectionReason } : {}),
@@ -821,6 +937,26 @@ export async function submitQualityCheck(input: QualityCheckInput): Promise<void
       tx.update(capacityRef, {
         remainingCapacityQuintals: capacity.remainingCapacityQuintals - input.actualWeight,
       });
+    }
+
+    if (accepted) {
+      const payment: Payment = {
+        procurementId: input.procurementId,
+        amount: payableAmount,
+        status: "processing",
+        transactionReference: null,
+      };
+      tx.set(paymentRef, payment);
+
+      const paymentNotification: AppNotification = {
+        farmerId: input.farmerId,
+        type: "payment_processing",
+        message: `भुगतान प्रक्रिया में: ₹${payableAmount} (${input.actualWeight} × ₹${input.pricePerUnit})।`,
+        channel: "in_app",
+        status: "unread",
+        createdAt: serverTimestamp() as unknown as AppNotification["createdAt"],
+      };
+      tx.set(paymentNotificationRef, paymentNotification);
     }
 
     const notification: AppNotification = {
@@ -902,6 +1038,34 @@ export async function increaseCentreCropCapacity(
   });
 }
 
+/**
+ * Admin-only: sets what this centre pays per unit for each quality grade of one commodity.
+ * Every price is typed in by the admin — nothing here derives a rate from the grade letter, by
+ * design: the whole feature exists because "A" is worth a different number of rupees in
+ * different mandis and different seasons, and a farmer comparing centres needs the real figure,
+ * not a formula.
+ *
+ * Grades the admin left blank are dropped rather than written as 0 — an unpriced grade should
+ * read as "no rate published" at quality check (operator types one free-hand), not as "this
+ * grade is worth nothing." Merged into the existing capacity doc so a price update can never
+ * clobber remainingCapacityQuintals, which other writers are concurrently decrementing.
+ */
+export async function setCentreCropGradePrices(
+  centreId: string,
+  cropType: string,
+  gradePrices: Record<string, number>
+): Promise<void> {
+  const cleaned: Record<string, number> = {};
+  for (const [grade, price] of Object.entries(gradePrices)) {
+    if (Number.isFinite(price) && price > 0) cleaned[grade] = price;
+  }
+  await setDoc(
+    doc(db, COLLECTIONS.centreCropCapacity, `${centreId}_${cropType}`),
+    { gradePrices: cleaned },
+    { merge: true }
+  );
+}
+
 export interface CentreCropCapacityWithId extends CentreCropCapacity {
   id: string;
 }
@@ -919,28 +1083,32 @@ export function listenCentreCropCapacities(
 }
 
 /**
- * Live remainingCapacityQuintals per centre, for one specific crop — the Centre Selection
- * screen's farmer has already picked their crop by the time they reach this screen, so this
- * only needs to watch that one crop across centres, same onSnapshot-on-a-collection pattern as
+ * Live capacity row per centre, for one specific crop — the Centre Selection screen's farmer has
+ * already picked their crop by the time they reach this screen, so this only needs to watch that
+ * one crop across centres, same onSnapshot-on-a-collection pattern as
  * listenQueueForCentre()/listenAdminOverview() elsewhere in this file. A centre with no
  * document for this crop simply doesn't appear in the returned map — the screen treats that as
  * "not capacity-gated," not "zero."
+ *
+ * Returns the whole row rather than just the remaining number because the same document now also
+ * carries `gradePrices`, and a farmer comparing centres wants both figures ("how much can they
+ * still buy" and "what will they pay me") from the one listener.
  */
 export function listenCropCapacityAcrossCentres(
   cropType: string,
-  onChange: (remainingByCentreId: Record<string, number>) => void
+  onChange: (byCentreId: Record<string, CentreCropCapacity>) => void
 ): Unsubscribe {
   const q = query(
     collection(db, COLLECTIONS.centreCropCapacity),
     where("cropType", "==", cropType)
   );
   return onSnapshot(q, (snap) => {
-    const remainingByCentreId: Record<string, number> = {};
+    const byCentreId: Record<string, CentreCropCapacity> = {};
     snap.docs.forEach((d) => {
       const data = d.data() as CentreCropCapacity;
-      remainingByCentreId[data.centreId] = data.remainingCapacityQuintals;
+      byCentreId[data.centreId] = data;
     });
-    onChange(remainingByCentreId);
+    onChange(byCentreId);
   });
 }
 

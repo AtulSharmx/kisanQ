@@ -26,6 +26,7 @@ import { initializeApp, cert } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { BUILT_IN_COMMODITIES } from "../src/data/commodities";
 
 const serviceAccountPath = join(__dirname, "..", "serviceAccountKey.json");
 
@@ -62,6 +63,11 @@ const SEEDED_CROP_CAPACITY: Record<string, Record<string, number>> = {
 const CROP_CAPACITY_IDS = Object.entries(SEEDED_CROP_CAPACITY).flatMap(([centreId, byCrop]) =>
   Object.keys(byCrop).map((cropType) => `${centreId}_${cropType}`)
 );
+// The commodity master seed.ts writes is exactly the bundled list, so a commodity present in
+// Firestore but *not* in that list can only have been added by an admin during rehearsal — real
+// usage, wiped like anything else. Edits to a seeded row (a renamed or deactivated built-in) are
+// restored by re-running seed.ts, not by this script.
+const COMMODITY_IDS = BUILT_IN_COMMODITIES.map((c) => c.key);
 // Today's slots keep the original `{centre}-slot-{i}` IDs; tomorrow/day-after (advance
 // booking demo data) use a `-d{offset}` suffix — see scripts/seed.ts.
 const SLOT_IDS = CENTRE_IDS.flatMap((centreId) => [
@@ -116,11 +122,13 @@ async function reset() {
     // never knows about, so it must be wiped like any other real-usage document.
     wipeExcept("queuePositionCounters", QUEUE_POSITION_COUNTER_IDS),
     wipeExcept("centreCropCapacity", CROP_CAPACITY_IDS),
+    wipeExcept("commodities", COMMODITY_IDS),
   ]);
   console.log(
     `  farmers -${mixed[0]}, crops -${mixed[1]}, bookings -${mixed[2]}, queue -${mixed[3]}, ` +
       `staff -${mixed[4]}, slots -${mixed[5]}, centres -${mixed[6]}, ` +
-      `queuePositionCounters -${mixed[7]}, centreCropCapacity -${mixed[8]}`
+      `queuePositionCounters -${mixed[7]}, centreCropCapacity -${mixed[8]}, ` +
+      `commodities -${mixed[9]}`
   );
 
   console.log("Wiping real-usage-only collections entirely...");

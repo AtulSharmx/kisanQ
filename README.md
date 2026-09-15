@@ -69,6 +69,9 @@ One Firebase backend, three access surfaces built from a single Expo codebase:
 - Advance booking — book a slot for today, tomorrow, or the day after, not just same-day
 - Centre selection ranked by live estimated wait, not just distance, showing each centre's live
   remaining daily buying capacity for the crop being booked
+- **Price range before you travel** — each centre shows the ₹ range that mandi is actually paying
+  for the crop being booked (lowest to highest grade), so a farmer knows the best realistic price
+  for their produce *before* loading the tractor
 - **Express slot** — a fixed-fee, capped-quota priority option (Tatkal-style, never an open
   bidding war) for a farmer who needs to skip ahead
 - Digital token with QR code, shareable via WhatsApp; cancel a not-yet-checked-in booking any time
@@ -84,13 +87,27 @@ One Firebase backend, three access surfaces built from a single Expo codebase:
 - Live queue management (Waiting / Processing / Completed) with one-tap "Call Next"
 - Weighing (expected vs. actual) and quality check (moisture %, grade, Accept/Reject with a
   confirm step) — both push an instant notification to the farmer
+- **Rate entry on the quality check** — the operator types the ₹/unit actually being paid (never
+  a hardcoded per-grade number). Picking a grade pre-fills that grade's rate as set by the admin,
+  but the typed value always wins, and the payable total (`weight × rate`) is shown live before
+  Accept. Accepting without a rate is blocked
 
 **Admin Dashboard**
 - Centre/farmer/booking overview counters, with its own Settings (language + logout)
 - District → centre drill-down with capacity-utilization flagging for overloaded centres
 - **Daily Buying Capacity** — set a daily quintal limit per centre *per crop* (a mandi can be
   buying more than one crop the same day), auto-decremented the moment a booking is Accepted, with
-  a manual top-up control for a deliberate policy increase
+  a manual top-up control for a deliberate policy increase. Capacity is tracked per (centre, crop)
+  pair, never as a shared pool — wheat running out never blocks a rice booking, and a booking that
+  doesn't fit is rejected with the exact quintals still available
+- **Commodity master** — wheat and paddy aren't hardcoded. Commodities live in their own Firestore
+  collection with a name, icon and unit (quintal/ton); an admin adds a new one from Settings at
+  runtime and it immediately appears everywhere — capacity rows, grade pricing, the farmer's crop
+  picker — with no code change and no redeploy. Commodities are deactivated rather than deleted, so
+  a crop already referenced by past bookings can never dangle
+- **Grade-based pricing** — under each crop's capacity row, the admin types the ₹/unit for grade
+  A, B and C separately (typed, never fixed per grade letter). Those rates drive the farmer's
+  price range and pre-fill the operator's quality-check rate field
 
 ## Tech stack
 
@@ -204,11 +221,16 @@ kisanQ/
 │   │   ├── firestoreService.ts   # All Firestore reads/writes/listeners
 │   │   ├── mockAadhaar.ts        # Mocked Aadhaar+OTP lookup
 │   │   └── pinAuth.ts            # Staff PIN hashing
+│   ├── data/
+│   │   ├── commodities.ts     # Bundled fallback commodity list + label/unit helpers
+│   │   └── grades.ts          # Quality grades (A/B/C)
+│   ├── hooks/
+│   │   └── useCommodities.ts  # Live commodity master, Firestore rows over the bundled list
 │   ├── context/               # Farmer / Operator / Language React contexts
 │   ├── navigation/            # React Navigation stacks (Farmer + Operator/Admin)
 │   ├── components/            # Shared UI (buttons, dialogs, progress dots, status badges)
 │   ├── theme/                 # Colours, spacing, type scale — from the UI/UX spec
-│   ├── i18n/strings.ts        # Bilingual (Hindi default) copy
+│   ├── i18n/strings.ts        # UI copy in all 12 languages (Hindi default)
 │   └── types/firestore.ts     # TypeScript shape of every Firestore collection
 └── docs/                      # Full project specification (see below)
 ```
@@ -222,8 +244,13 @@ for the canonical spec:
 
 `farmers`, `identityVerification`, `crops`, `centres`, `slots`, `bookings`, `queue`,
 `procurement`, `payments`, `notifications`, `staff`, `staffSessions`, `tokenCounters`,
-`queuePositionCounters` (the last four are internal, not in the Master Spec — see the comments
-in `src/types/firestore.ts`).
+`queuePositionCounters`, `commodities`, `centreCropCapacity` (the last six are internal, not in
+the Master Spec — see the comments in `src/types/firestore.ts`).
+
+`commodities/{cropType}` is the runtime commodity master (name, icon, unit, `active`), and
+`centreCropCapacity/{centreId}_{cropType}` holds that mandi's daily capacity for that one
+commodity plus its per-grade `gradePrices` map — one row per (centre, crop) pair, which is what
+keeps each commodity's capacity and rates independent of every other commodity's.
 
 ## Build status
 

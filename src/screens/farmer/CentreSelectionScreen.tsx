@@ -27,6 +27,21 @@ interface Ranked {
   /** null = this centre hasn't been configured with a capacity limit for this crop at all —
    * shown as "no limit tracked", not "0 available". */
   remainingCapacityQuintals: number | null;
+  /** What this centre pays per grade for this crop; empty = it hasn't published rates. */
+  gradePrices: Record<string, number>;
+}
+
+/**
+ * "₹75–₹100" for a centre that pays different rates by grade, "₹100" when every grade pays the
+ * same, and null when the centre has published nothing — in which case the row simply omits the
+ * rate line rather than showing a zero the farmer might plan around.
+ */
+function priceRange(gradePrices: Record<string, number>): string | null {
+  const values = Object.values(gradePrices).filter((p) => Number.isFinite(p) && p > 0);
+  if (values.length === 0) return null;
+  const low = Math.min(...values);
+  const high = Math.max(...values);
+  return low === high ? `₹${low}` : `₹${low}–₹${high}`;
 }
 
 /** Centre Selection — UI/UX spec screen 7. Ranked list, not map-first. */
@@ -67,6 +82,7 @@ export function CentreSelectionScreen({ route, navigation }: Props) {
             waitMinutes: await getCentreEstimatedWaitMinutes(centre.id),
             hasSlots: await hasAvailableSlotToday(centre.id),
             remainingCapacityQuintals: capacity?.remainingCapacityQuintals ?? null,
+            gradePrices: capacity?.gradePrices ?? {},
           };
         })
       );
@@ -75,20 +91,25 @@ export function CentreSelectionScreen({ route, navigation }: Props) {
     });
   }, [farmerId, cropType]);
 
-  // Live remainingCapacityQuintals, for the one crop this farmer is bringing — this is the one
-  // piece of this screen's data that a farmer benefits from seeing update without reloading (an
-  // Accept elsewhere, or an admin's manual increase, both land here within the same second).
-  // Merged into the already-ranked list rather than recomputing distance/wait/hasSlots, which
-  // don't change live.
+  // Live remaining capacity *and* published rates, for the one crop this farmer is bringing —
+  // these are the pieces of this screen's data a farmer benefits from seeing update without
+  // reloading (an Accept elsewhere, an admin's manual increase, or an admin editing this
+  // season's rate all land here within the same second). Merged into the already-ranked list
+  // rather than recomputing distance/wait/hasSlots, which don't change live.
   useEffect(() => {
-    const unsubscribe = listenCropCapacityAcrossCentres(cropType, (remainingByCentreId) => {
+    const unsubscribe = listenCropCapacityAcrossCentres(cropType, (byCentreId) => {
       setRanked((prev) =>
         prev
-          ? prev.map((r) =>
-              r.centre.id in remainingByCentreId
-                ? { ...r, remainingCapacityQuintals: remainingByCentreId[r.centre.id] }
-                : r
-            )
+          ? prev.map((r) => {
+              const capacity = byCentreId[r.centre.id];
+              return capacity
+                ? {
+                    ...r,
+                    remainingCapacityQuintals: capacity.remainingCapacityQuintals,
+                    gradePrices: capacity.gradePrices ?? {},
+                  }
+                : r;
+            })
           : prev
       );
     });
@@ -140,6 +161,11 @@ export function CentreSelectionScreen({ route, navigation }: Props) {
                 )}
               </Text>
             )}
+            {priceRange(item.gradePrices) !== null && (
+              <Text style={styles.priceRange}>
+                💰 {t("centrePriceRangeLabel").replace("{range}", priceRange(item.gradePrices)!)}
+              </Text>
+            )}
           </Pressable>
         )}
       />
@@ -167,5 +193,6 @@ const styles = StyleSheet.create({
   slotsOk: { color: colors.primary, fontWeight: "700" },
   slotsFull: { color: colors.error, fontWeight: "700" },
   capacity: { fontSize: fontSize.body, color: colors.textMuted },
+  priceRange: { fontSize: fontSize.body, color: colors.text, fontWeight: "700" },
   pressed: { opacity: 0.7 },
 });

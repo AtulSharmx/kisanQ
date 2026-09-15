@@ -18,6 +18,7 @@ import { getFirestore, GeoPoint, FieldValue } from "firebase-admin/firestore";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
+import { BUILT_IN_COMMODITIES } from "../src/data/commodities";
 
 // Matches src/services/pinAuth.ts (plain SHA-256, no salt — good enough to keep PINs out of
 // plaintext in a prototype, not a production-grade credential store).
@@ -96,13 +97,44 @@ async function seed() {
     "centre-pnp": { wheat: 400, paddy: 250 },
     "centre-snp": { wheat: 300, paddy: 200 },
   };
+  // What each centre pays per grade, in ₹ per quintal. Loosely anchored on real 2024-25 MSP
+  // (wheat ~₹2275/qtl, paddy ~₹2300/qtl) with a grade spread around it, and varied slightly per
+  // centre so the farmer's Centre Selection screen has a *reason* to show a range rather than
+  // three identical rows. These are demo figures, not published rates — the whole point of the
+  // feature is that an admin types the real ones.
+  const gradePriceDefs: Record<string, Record<string, Record<string, number>>> = {
+    "centre-ksn": { wheat: { A: 2275, B: 2150, C: 1980 }, paddy: { A: 2300, B: 2180, C: 2000 } },
+    "centre-pnp": { wheat: { A: 2260, B: 2140, C: 1970 }, paddy: { A: 2290, B: 2170, C: 1990 } },
+    "centre-snp": { wheat: { A: 2280, B: 2160, C: 1990 }, paddy: { A: 2310, B: 2190, C: 2010 } },
+  };
   for (const [centreId, byCrop] of Object.entries(cropCapacityDefs)) {
     for (const [cropType, dailyCapacityQuintals] of Object.entries(byCrop)) {
       await db
         .collection("centreCropCapacity")
         .doc(`${centreId}_${cropType}`)
-        .set({ centreId, cropType, dailyCapacityQuintals, remainingCapacityQuintals: dailyCapacityQuintals });
+        .set({
+          centreId,
+          cropType,
+          dailyCapacityQuintals,
+          remainingCapacityQuintals: dailyCapacityQuintals,
+          gradePrices: gradePriceDefs[centreId]?.[cropType] ?? {},
+        });
     }
+  }
+
+  console.log("Seeding the commodity master...");
+  // The runtime commodity table. Seeded from the same bundled list the app falls back to, so a
+  // seeded Firestore and a fresh clone show the same picker — the difference is that once these
+  // rows exist an admin can edit them (rename, change unit, deactivate) like any commodity they
+  // add themselves. Doc id === the `cropType` string every other collection keys on.
+  for (const commodity of BUILT_IN_COMMODITIES) {
+    await db.collection("commodities").doc(commodity.key).set({
+      name: commodity.name,
+      icon: commodity.icon,
+      unit: commodity.unit,
+      labels: commodity.labels,
+      active: true,
+    });
   }
 
   console.log("Seeding slots for today, tomorrow, and the day after (advance booking demo)...");

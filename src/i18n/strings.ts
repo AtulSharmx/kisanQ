@@ -425,6 +425,17 @@ export const strings = {
     hi: "भुगतान", en: "Payment", pa: "ਭੁਗਤਾਨ", bn: "পেমেন্ট", mr: "पेमेंट", gu: "ચુકવણી", te: "చెల్లింపు",
     ta: "கட்டணம்", kn: "ಪಾವತಿ", ml: "പേയ്‌മെന്റ്", or: "ଦେୟ", ur: "ادائیگی",
   },
+  // Shown on the tracker once quality check is done: the exact rate the operator entered and the
+  // amount it works out to. This is the transparency point of the whole screen — the farmer sees
+  // the arithmetic (weight x rate) rather than being handed a figure at the counter.
+  procPriceDetail: {
+    hi: "भाव: ₹{rate} — कुल राशि: ₹{amount}", en: "Rate: ₹{rate} — total amount: ₹{amount}",
+    pa: "ਭਾਅ: ₹{rate} — ਕੁੱਲ ਰਕਮ: ₹{amount}", bn: "দর: ₹{rate} — মোট পরিমাণ: ₹{amount}",
+    mr: "भाव: ₹{rate} — एकूण रक्कम: ₹{amount}", gu: "ભાવ: ₹{rate} — કુલ રકમ: ₹{amount}",
+    te: "ధర: ₹{rate} — మొత్తం: ₹{amount}", ta: "விலை: ₹{rate} — மொத்தத் தொகை: ₹{amount}",
+    kn: "ದರ: ₹{rate} — ಒಟ್ಟು ಮೊತ್ತ: ₹{amount}", ml: "നിരക്ക്: ₹{rate} — ആകെ തുക: ₹{amount}",
+    or: "ଦର: ₹{rate} — ମୋଟ ରାଶି: ₹{amount}", ur: "نرخ: ₹{rate} — کل رقم: ₹{amount}",
+  },
   procRejected: {
     hi: "अस्वीकार किया गया", en: "Rejected", pa: "ਅਸਵੀਕਾਰ ਕੀਤਾ ਗਿਆ", bn: "প্রত্যাখ্যাত", mr: "नाकारले",
     gu: "નકારાયું", te: "తిరస్కరించబడింది", ta: "நிராகரிக்கப்பட்டது", kn: "ತಿರಸ್ಕರಿಸಲಾಗಿದೆ", ml: "നിരസിച്ചു",
@@ -486,6 +497,28 @@ export const strings = {
     gu: "આજે ઉપલબ્ધ: {n} ક્વિન્ટલ", te: "ఈరోజు అందుబాటులో: {n} క్వింటాళ్ళు",
     ta: "இன்று கிடைக்கும்: {n} குவிண்டல்", kn: "ಇಂದು ಲಭ್ಯ: {n} ಕ್ವಿಂಟಲ್",
     ml: "ഇന്ന് ലഭ്യം: {n} ക്വിന്റൽ", or: "ଆଜି ଉପଲବ୍ଧ: {n} କ୍ୱିଣ୍ଟାଲ", ur: "آج دستیاب: {n} کوئنٹل",
+  },
+  // The centre's published ₹/unit range for the chosen crop, shown on Centre Selection so a
+  // farmer can see what each mandi actually pays before travelling — the grade decides where in
+  // that range their own lot lands. {range} is pre-formatted by the screen (e.g. "₹75–₹100").
+  centrePriceRangeLabel: {
+    hi: "भाव: {range}", en: "Rate: {range}", pa: "ਭਾਅ: {range}", bn: "দর: {range}",
+    mr: "भाव: {range}", gu: "ભાવ: {range}", te: "ధర: {range}", ta: "விலை: {range}",
+    kn: "ದರ: {range}", ml: "നിരക്ക്: {range}", or: "ଦର: {range}", ur: "نرخ: {range}",
+  },
+  centreCapacityInsufficient: {
+    hi: "आज इस फसल के लिए केवल {n} क्विंटल क्षमता बची है — कम मात्रा या कल का स्लॉट चुनें",
+    en: "Only {n} quintals of capacity are left for this crop today — reduce the quantity or pick tomorrow's slot",
+    pa: "ਅੱਜ ਇਸ ਫਸਲ ਲਈ ਸਿਰਫ਼ {n} ਕੁਇੰਟਲ ਸਮਰੱਥਾ ਬਾਕੀ ਹੈ — ਮਾਤਰਾ ਘਟਾਓ ਜਾਂ ਕੱਲ੍ਹ ਦਾ ਸਲਾਟ ਚੁਣੋ",
+    bn: "আজ এই ফসলের জন্য মাত্র {n} কুইন্টাল ক্ষমতা বাকি আছে — পরিমাণ কমান বা আগামীকালের স্লট নিন",
+    mr: "आज या पिकासाठी फक्त {n} क्विंटल क्षमता शिल्लक आहे — प्रमाण कमी करा किंवा उद्याचा स्लॉट निवडा",
+    gu: "આજે આ પાક માટે માત્ર {n} ક્વિન્ટલ ક્ષમતા બાકી છે — જથ્થો ઘટાડો અથવા આવતીકાલનો સ્લોટ પસંદ કરો",
+    te: "ఈరోజు ఈ పంటకు కేవలం {n} క్వింటాళ్ళ సామర్థ్యం మాత్రమే మిగిలి ఉంది — పరిమాణం తగ్గించండి లేదా రేపటి స్లాట్ ఎంచుకోండి",
+    ta: "இன்று இந்தப் பயிருக்கு {n} குவிண்டல் திறன் மட்டுமே மீதம் உள்ளது — அளவைக் குறைக்கவும் அல்லது நாளைய ஸ்லாட்டைத் தேர்ந்தெடுக்கவும்",
+    kn: "ಇಂದು ಈ ಬೆಳೆಗೆ ಕೇವಲ {n} ಕ್ವಿಂಟಲ್ ಸಾಮರ್ಥ್ಯ ಮಾತ್ರ ಉಳಿದಿದೆ — ಪ್ರಮಾಣ ಕಡಿಮೆ ಮಾಡಿ ಅಥವಾ ನಾಳೆಯ ಸ್ಲಾಟ್ ಆಯ್ಕೆಮಾಡಿ",
+    ml: "ഇന്ന് ഈ വിളയ്ക്ക് {n} ക്വിന്റൽ ശേഷി മാത്രമേ ബാക്കിയുള്ളൂ — അളവ് കുറയ്ക്കുക അല്ലെങ്കിൽ നാളത്തെ സ്ലോട്ട് തിരഞ്ഞെടുക്കുക",
+    or: "ଆଜି ଏହି ଫସଲ ପାଇଁ କେବଳ {n} କ୍ୱିଣ୍ଟାଲ କ୍ଷମତା ବାକି ଅଛି — ପରିମାଣ କମ କରନ୍ତୁ କିମ୍ବା କାଲିର ସ୍ଲଟ ବାଛନ୍ତୁ",
+    ur: "آج اس فصل کے لیے صرف {n} کوئنٹل گنجائش باقی ہے — مقدار کم کریں یا کل کا سلاٹ منتخب کریں",
   },
   centreCapacityFull: {
     hi: "आज की खरीद क्षमता पूरी हो गई — कृपया कल का स्लॉट चुनें",
@@ -815,6 +848,60 @@ export const strings = {
     te: "సెట్టింగ్‌లు", ta: "அமைப்புகள்", kn: "ಸೆಟ್ಟಿಂಗ್‌ಗಳು", ml: "ക്രമീകരണങ്ങൾ", or: "ସେଟିଂସ", ur: "ترتیبات",
   },
 
+  // Grade-wise price (Admin Drilldown) and the runtime commodity master (Admin Settings). The
+  // price is deliberately typed in per grade per (centre, commodity) — never derived from the
+  // grade letter — so a mandi can publish this season's real rates rather than a number the app
+  // invented.
+  adminGradePriceLabel: {
+    hi: "ग्रेड के अनुसार भाव (₹/{unit})", en: "Price by grade (₹/{unit})",
+    pa: "ਗ੍ਰੇਡ ਅਨੁਸਾਰ ਭਾਅ (₹/{unit})", bn: "গ্রেড অনুযায়ী দর (₹/{unit})",
+    mr: "ग्रेडनुसार भाव (₹/{unit})", gu: "ગ્રેડ પ્રમાણે ભાવ (₹/{unit})",
+    te: "గ్రేడ్ ప్రకారం ధర (₹/{unit})", ta: "தரத்தின்படி விலை (₹/{unit})",
+    kn: "ಗ್ರೇಡ್ ಪ್ರಕಾರ ದರ (₹/{unit})", ml: "ഗ്രേഡ് അനുസരിച്ച് വില (₹/{unit})",
+    or: "ଗ୍ରେଡ ଅନୁସାରେ ଦର (₹/{unit})", ur: "گریڈ کے مطابق نرخ (₹/{unit})",
+  },
+  adminSavePricesBtn: {
+    hi: "भाव सेव करें", en: "Save prices", pa: "ਭਾਅ ਸੇਵ ਕਰੋ", bn: "দর সংরক্ষণ করুন",
+    mr: "भाव सेव्ह करा", gu: "ભાવ સેવ કરો", te: "ధరలు సేవ్ చేయండి", ta: "விலைகளைச் சேமிக்கவும்",
+    kn: "ದರಗಳನ್ನು ಉಳಿಸಿ", ml: "വിലകൾ സേവ് ചെയ്യുക", or: "ଦର ସେଭ କରନ୍ତୁ", ur: "نرخ محفوظ کریں",
+  },
+  adminCommoditiesTitle: {
+    hi: "वस्तुएँ", en: "Commodities", pa: "ਵਸਤਾਂ", bn: "পণ্য", mr: "वस्तू", gu: "વસ્તુઓ",
+    te: "సరుకులు", ta: "பொருட்கள்", kn: "ಸರಕುಗಳು", ml: "ചരക്കുകൾ", or: "ସାମଗ୍ରୀ", ur: "اجناس",
+  },
+  adminAddCommodityLabel: {
+    hi: "नई वस्तु जोड़ें:", en: "Add a new commodity:", pa: "ਨਵੀਂ ਵਸਤ ਜੋੜੋ:", bn: "নতুন পণ্য যোগ করুন:",
+    mr: "नवीन वस्तू जोडा:", gu: "નવી વસ્તુ ઉમેરો:", te: "కొత్త సరుకును జోడించండి:",
+    ta: "புதிய பொருளைச் சேர்க்கவும்:", kn: "ಹೊಸ ಸರಕನ್ನು ಸೇರಿಸಿ:", ml: "പുതിയ ചരക്ക് ചേർക്കുക:",
+    or: "ନୂଆ ସାମଗ୍ରୀ ଯୋଡ଼ନ୍ତୁ:", ur: "نئی جنس شامل کریں:",
+  },
+  adminCommodityNamePlaceholder: {
+    hi: "नाम", en: "Name", pa: "ਨਾਮ", bn: "নাম", mr: "नाव", gu: "નામ", te: "పేరు", ta: "பெயர்",
+    kn: "ಹೆಸರು", ml: "പേര്", or: "ନାମ", ur: "نام",
+  },
+  adminCommodityIconPlaceholder: {
+    hi: "चिह्न", en: "Icon", pa: "ਚਿੰਨ੍ਹ", bn: "আইকন", mr: "चिन्ह", gu: "આઇકન", te: "చిహ్నం",
+    ta: "சின்னம்", kn: "ಚಿಹ್ನೆ", ml: "ചിഹ്നം", or: "ଚିହ୍ନ", ur: "نشان",
+  },
+  adminUnitLabel: {
+    hi: "इकाई", en: "Unit", pa: "ਇਕਾਈ", bn: "একক", mr: "एकक", gu: "એકમ", te: "యూనిట్",
+    ta: "அலகு", kn: "ಘಟಕ", ml: "യൂണിറ്റ്", or: "ଏକକ", ur: "اکائی",
+  },
+  adminActivateBtn: {
+    hi: "चालू करें", en: "Activate", pa: "ਚਾਲੂ ਕਰੋ", bn: "চালু করুন", mr: "सुरू करा", gu: "ચાલુ કરો",
+    te: "ప్రారంభించండి", ta: "இயக்கவும்", kn: "ಸಕ್ರಿಯಗೊಳಿಸಿ", ml: "സജീവമാക്കുക",
+    or: "ଚାଲୁ କରନ୍ତୁ", ur: "فعال کریں",
+  },
+  adminDeactivateBtn: {
+    hi: "बंद करें", en: "Deactivate", pa: "ਬੰਦ ਕਰੋ", bn: "বন্ধ করুন", mr: "बंद करा", gu: "બંધ કરો",
+    te: "నిలిపివేయండి", ta: "முடக்கவும்", kn: "ನಿಷ್ಕ್ರಿಯಗೊಳಿಸಿ", ml: "നിർജ്ജീവമാക്കുക",
+    or: "ବନ୍ଦ କରନ୍ତୁ", ur: "غیر فعال کریں",
+  },
+  adminInactiveTag: {
+    hi: "बंद", en: "Inactive", pa: "ਬੰਦ", bn: "বন্ধ", mr: "बंद", gu: "બંધ", te: "నిలిపివేయబడింది",
+    ta: "முடக்கப்பட்டது", kn: "ನಿಷ್ಕ್ರಿಯ", ml: "നിർജ്ജീവം", or: "ବନ୍ଦ", ur: "غیر فعال",
+  },
+
   // Operator screens (Scan/Check-in, Live Queue Management, Weighing, Quality Check) — the
   // day-to-day counter-staff flow, wired through i18n for the same reason Admin was: staff
   // deserve a language choice too, not just a hardcoded Hindi+English mix with no way to switch.
@@ -943,6 +1030,29 @@ export const strings = {
   operatorGradeLabel: {
     hi: "ग्रेड", en: "Grade", pa: "ਗ੍ਰੇਡ", bn: "গ্রেড", mr: "ग्रेड", gu: "ગ્રેડ", te: "గ్రేడ్",
     ta: "தரம்", kn: "ಗ್ರೇಡ್", ml: "ഗ്രേഡ്", or: "ଗ୍ରେଡ", ur: "گریڈ",
+  },
+  // The rate the operator actually pays for this lot. Pre-filled from the centre's configured
+  // price for the chosen grade, but always typed/editable — a grade letter is not a price.
+  operatorPriceLabel: {
+    hi: "भाव (₹ प्रति {unit})", en: "Price (₹ per {unit})", pa: "ਭਾਅ (₹ ਪ੍ਰਤੀ {unit})",
+    bn: "দর (₹ প্রতি {unit})", mr: "भाव (₹ प्रति {unit})", gu: "ભાવ (₹ પ્રતિ {unit})",
+    te: "ధర ({unit}కు ₹)", ta: "விலை ({unit} ஒன்றுக்கு ₹)", kn: "ದರ ({unit}ಗೆ ₹)",
+    ml: "വില ({unit}ന് ₹)", or: "ଦର (₹ ପ୍ରତି {unit})", ur: "نرخ (₹ فی {unit})",
+  },
+  operatorEnterPriceError: {
+    hi: "कृपया भाव दर्ज करें", en: "Please enter the price", pa: "ਕਿਰਪਾ ਕਰਕੇ ਭਾਅ ਦਰਜ ਕਰੋ",
+    bn: "অনুগ্রহ করে দর লিখুন", mr: "कृपया भाव टाका", gu: "કૃપા કરીને ભાવ દાખલ કરો",
+    te: "దయచేసి ధరను నమోదు చేయండి", ta: "தயவுசெய்து விலையை உள்ளிடவும்",
+    kn: "ದಯವಿಟ್ಟು ದರವನ್ನು ನಮೂದಿಸಿ", ml: "ദയവായി വില നൽകുക", or: "ଦୟାକରି ଦର ଦିଅନ୍ତୁ",
+    ur: "براہ کرم نرخ درج کریں",
+  },
+  operatorConfiguredPriceHint: {
+    hi: "मंडी का तय भाव: {rates}", en: "Mandi's set rates: {rates}", pa: "ਮੰਡੀ ਦੇ ਤੈਅ ਭਾਅ: {rates}",
+    bn: "মান্ডির নির্ধারিত দর: {rates}", mr: "मंडीचे ठरलेले भाव: {rates}",
+    gu: "મંડીના નક્કી ભાવ: {rates}", te: "మండి నిర్ణయించిన ధరలు: {rates}",
+    ta: "மண்டி நிர்ணயித்த விலைகள்: {rates}", kn: "ಮಂಡಿ ನಿಗದಿಪಡಿಸಿದ ದರಗಳು: {rates}",
+    ml: "മണ്ഡി നിശ്ചയിച്ച നിരക്കുകൾ: {rates}", or: "ମଣ୍ଡିର ନିର୍ଦ୍ଧାରିତ ଦର: {rates}",
+    ur: "منڈی کے مقررہ نرخ: {rates}",
   },
   operatorRejectionReasonLabel: {
     hi: "अस्वीकृति का कारण, यदि हो", en: "Rejection reason, if any",

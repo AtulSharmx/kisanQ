@@ -39,6 +39,38 @@ export interface Crop {
   preferredCentreId: string;
 }
 
+/**
+ * The unit a commodity is bought and priced in. Everything the app computes with
+ * (capacity, weights, ₹/unit) is a plain number — the unit only ever decides the *label* next
+ * to it, so a mandi buying sugarcane in tonnes and wheat in quintals never needs two code
+ * paths. There's deliberately no conversion factor here: a real mandi quotes MSP per quintal
+ * for wheat and per tonne for cane, and converting between them would invent precision the
+ * data doesn't have.
+ */
+export type CommodityUnit = "quintal" | "ton";
+
+/**
+ * commodities/{commodityId}
+ * The runtime commodity master. The doc id *is* the commodity key — the same string that
+ * lands in `Crop.cropType`, `Booking.cropType`, and the `{centreId}_{cropType}` capacity doc
+ * id — so a commodity an admin adds at runtime flows through capacity, booking, validation and
+ * pricing with no code change.
+ *
+ * `labels` is optional and partial on purpose: the ten commodities bundled in src/data/crops.ts
+ * ship with all 12 languages hand-translated, but an admin adding "Soybean" from the Admin
+ * Settings screen can only type one name. Rendering falls back `labels[lang] -> name`, so a
+ * runtime-added commodity shows its typed name in every language rather than showing nothing.
+ * See src/data/commodities.ts, which merges this collection over the bundled list (bundled ones
+ * stay available even before anyone seeds this collection).
+ */
+export interface Commodity {
+  name: string;
+  icon: string;
+  unit: CommodityUnit;
+  labels?: Partial<Record<string, string>>;
+  active: boolean;
+}
+
 export type CentreStatus = "active" | "inactive";
 
 /**
@@ -85,6 +117,19 @@ export interface CentreCropCapacity {
   cropType: string;
   dailyCapacityQuintals: number;
   remainingCapacityQuintals: number;
+  /**
+   * Grade -> price the centre pays for that grade, in ₹ per unit of the commodity (see
+   * `Commodity.unit`). Typed in by an admin, never derived from the grade letter — the whole
+   * point is that the rate is a real policy number that varies by mandi and by season, so the
+   * app must not pretend to know that "A" means any particular figure.
+   *
+   * Optional, like the capacity doc itself: a (centre, commodity) pair with no prices set is
+   * simply not publishing a rate yet, and the operator types the price free-hand at quality
+   * check instead of having it pre-filled. Keyed by the same grade letters as
+   * src/data/grades.ts; an unknown key is ignored rather than being an error, so changing the
+   * grade scale later doesn't corrupt existing docs.
+   */
+  gradePrices?: Record<string, number>;
 }
 
 /** slots/{slotId} */
@@ -118,6 +163,13 @@ export interface Booking {
   centreId: string;
   slotId: string;
   cropId: string;
+  /**
+   * The commodity this booking is for — denormalized from crops/{cropId}.cropType so that every
+   * consumer that needs to know "which commodity's capacity does this booking draw down?" can
+   * answer it from the booking alone. Optional only for backwards compatibility with bookings
+   * created before this field existed (submitQualityCheck falls back to reading the crop doc).
+   */
+  cropType?: string;
   tokenNumber: string;
   status: BookingStatus;
   checkedInByStaffId?: string;
@@ -163,6 +215,13 @@ export interface Procurement {
   qualityStatus: QualityStatus;
   moisturePct: number | null;
   grade: string | null;
+  /**
+   * ₹ per unit actually paid for this lot, typed in by the operator at quality check (pre-filled
+   * from the centre's configured price for the chosen grade, but always editable — the rate is
+   * never fixed by the grade letter alone). Null until quality check happens; on a rejection it
+   * stays null, since nothing was bought.
+   */
+  pricePerUnit: number | null;
   procurementStatus: ProcurementStatus;
   rejectionReason?: string;
 }
@@ -268,6 +327,7 @@ export const COLLECTIONS = {
   farmers: "farmers",
   identityVerification: "identityVerification",
   crops: "crops",
+  commodities: "commodities",
   centres: "centres",
   centreCropCapacity: "centreCropCapacity",
   slots: "slots",

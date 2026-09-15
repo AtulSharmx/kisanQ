@@ -18,13 +18,13 @@ No local setup needed to try it — both surfaces are deployed against the real 
 | Surface | Link |
 |---|---|
 | **Operator / Admin** (web) | **[kisanq-farmer.web.app](https://kisanq-farmer.web.app)** |
-| **Farmer app** (Android) | **[Download APK](https://expo.dev/accounts/atulshxrma/projects/kisanq/builds/1e213b10-c8b1-4f13-887d-1fdda694b2ea)** — open the link on an Android phone (or scan its QR code) and tap Install. No Play Store, no Expo account needed. |
+| **Farmer app** (Android) | **[Download APK](https://expo.dev/accounts/atulshxrma/projects/kisanq/builds/b64d0caf-3ba5-4e09-815a-7b32e5cd3d2f)** — open the link on an Android phone (or scan its QR code) and tap Install. No Play Store, no Expo account needed. |
 
 See [Demo credentials](#demo-credentials) below for the Staff ID/PIN to log into Operator/Admin.
 Farmers register through the app itself (any 12-digit Aadhaar, OTP shown on-screen).
 
 > **Note:** the Android build link is an EAS internal-distribution artifact, which expires
-> ~14 days after it was built (2026-09-15). If it's gone stale, rebuild it with
+> ~14 days after it was built — this one on 2026-09-29. If it's gone stale, rebuild it with
 > `eas build --platform android --profile preview` (see [`eas.json`](eas.json)) — everything
 > needed (Firebase config, keystore) is already configured on the EAS project.
 
@@ -79,7 +79,18 @@ One Firebase backend, three access surfaces built from a single Expo codebase:
   not a number frozen at check-in
 - **Procurement Status tracker** — Booked → Arrived → Weighed → Quality-checked → Accepted →
   Payment, ticking in real time as the operator works
+- **Payment in process, with a date** — the moment a lot is accepted the payment row turns to
+  "payment in process" and prints the date the money is expected (acceptance + 3 days, the MSP
+  72-hour settlement norm), alongside the rate and total. The row only ticks green on an actual
+  settled payment — "processing with no date" is exactly the open-ended limbo the tracker exists
+  to end. Payments are simulated; no money moves
 - Real-time in-app Notifications for every stage change
+- **Photographs, not emoji, in the crop picker** — ten openly-licensed Wikimedia Commons photos
+  (credited in Settings and in [`assets/crops/CREDITS.md`](assets/crops/CREDITS.md)), so bajra and
+  jowar are told apart by sight rather than by reading the label. A commodity an admin adds at
+  runtime falls back to its emoji
+- **A Help button on every screen** — one tap to the Kisan Call Centre, from the language-select
+  screen onwards, never covered by the screen's own buttons
 
 **Operator Console**
 - Staff ID + PIN login, scoped to one procurement centre, with its own Settings (language + logout)
@@ -90,7 +101,13 @@ One Firebase backend, three access surfaces built from a single Expo codebase:
 - **Rate entry on the quality check** — the operator types the ₹/unit actually being paid (never
   a hardcoded per-grade number). Picking a grade pre-fills that grade's rate as set by the admin,
   but the typed value always wins, and the payable total (`weight × rate`) is shown live before
-  Accept. Accepting without a rate is blocked
+  Accept. Accepting without a rate is blocked. Accepting raises the payment and stamps the
+  expected payment date the farmer sees on their tracker
+- **Real URLs and a back button** — every staff screen has its own path (`/checkin`, `/queue`,
+  `/weighing`, `/quality-check`, `/admin`, `/admin/centres`, …), so browser Back and Forward
+  work, a reload keeps you where you were, and a screen can be bookmarked or shared. Weighing
+  and Quality Check carry a back chip to the queue; neither writes anything until its confirm
+  button, so leaving is safe
 
 **Admin Dashboard**
 - Centre/farmer/booking overview counters, with its own Settings (language + logout)

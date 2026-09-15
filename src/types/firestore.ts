@@ -237,6 +237,14 @@ export interface Payment {
   amount: number;
   status: PaymentStatus;
   transactionReference: string | null;
+  /**
+   * The date the farmer is told to expect the money, as "YYYY-MM-DD" — set when the payment is
+   * raised at quality check and never moved afterwards, so a farmer can hold the app to the date
+   * it originally promised. Stored as a plain date string rather than a Timestamp because it is a
+   * calendar date, not an instant: "you will be paid on the 18th" must not shift with the reader's
+   * timezone. Optional only for payment docs written before this field existed.
+   */
+  expectedPaymentDate?: string;
 }
 
 export type NotificationType =

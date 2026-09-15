@@ -425,6 +425,25 @@ export const strings = {
     hi: "भुगतान", en: "Payment", pa: "ਭੁਗਤਾਨ", bn: "পেমেন্ট", mr: "पेमेंट", gu: "ચુકવણી", te: "చెల్లింపు",
     ta: "கட்டணம்", kn: "ಪಾವತಿ", ml: "പേയ്‌മെന്റ്", or: "ଦେୟ", ur: "ادائیگی",
   },
+  // The payment step's label while the money is raised but not yet settled. A separate label
+  // rather than the plain "Payment" one because an unticked box next to "Payment" reads as
+  // "nothing has happened", which is the opposite of the truth once the lot is accepted.
+  procStepPaymentProcessing: {
+    hi: "भुगतान प्रक्रिया में", en: "Payment in process", pa: "ਭੁਗਤਾਨ ਪ੍ਰਕਿਰਿਆ ਵਿੱਚ",
+    bn: "পেমেন্ট প্রক্রিয়াধীন", mr: "पेमेंट प्रक्रियेत", gu: "ચુકવણી પ્રક્રિયામાં",
+    te: "చెల్లింపు ప్రాసెస్‌లో ఉంది", ta: "கட்டணம் செயலாக்கத்தில்", kn: "ಪಾವತಿ ಪ್ರಕ್ರಿಯೆಯಲ್ಲಿದೆ",
+    ml: "പേയ്‌മെന്റ് പ്രോസസ്സിലാണ്", or: "ଦେୟ ପ୍ରକ୍ରିୟାରେ", ur: "ادائیگی زیرِ عمل",
+  },
+  // The date the farmer can hold the centre to. Printing a date at all is the point — "processing"
+  // with no date is the open-ended limbo the tracker exists to end.
+  procExpectedPaymentDate: {
+    hi: "अपेक्षित भुगतान तारीख: {date}", en: "Expected payment date: {date}",
+    pa: "ਸੰਭਾਵਿਤ ਭੁਗਤਾਨ ਤਾਰੀਖ: {date}", bn: "প্রত্যাশিত পেমেন্টের তারিখ: {date}",
+    mr: "अपेक्षित पेमेंट तारीख: {date}", gu: "અપેક્ષિત ચુકવણી તારીખ: {date}",
+    te: "అంచనా చెల్లింపు తేదీ: {date}", ta: "எதிர்பார்க்கப்படும் கட்டணத் தேதி: {date}",
+    kn: "ನಿರೀಕ್ಷಿತ ಪಾವತಿ ದಿನಾಂಕ: {date}", ml: "പ്രതീക്ഷിത പേയ്‌മെന്റ് തീയതി: {date}",
+    or: "ଆଶା କରାଯାଉଥିବା ଦେୟ ତାରିଖ: {date}", ur: "متوقع ادائیگی کی تاریخ: {date}",
+  },
   // Shown on the tracker once quality check is done: the exact rate the operator entered and the
   // amount it works out to. This is the transparency point of the whole screen — the farmer sees
   // the arithmetic (weight x rate) rather than being handed a figure at the counter.

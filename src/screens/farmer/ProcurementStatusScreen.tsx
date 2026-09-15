@@ -8,6 +8,7 @@ import { useFarmer } from "../../context/FarmerContext";
 import { ScreenContainer } from "../../components/ScreenContainer";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import {
+  formatPaymentDate,
   getActiveBookingForFarmer,
   listenBooking,
   listenPaymentForProcurement,
@@ -20,19 +21,33 @@ import type { StringKey } from "../../i18n/strings";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ProcurementStatus">;
 
+/**
+ * A tracker row is three-state, not two. "pending" is a step nothing has happened on yet,
+ * "done" is finished, and "active" is under way — used by the payment row once the lot is
+ * accepted and the money has been raised but not settled. Icon + text together, never colour
+ * alone (design principle 4).
+ */
+type StepState = "pending" | "active" | "done";
+
+const STEP_ICON: Record<StepState, string> = {
+  pending: "⬜",
+  active: "⏳",
+  done: "✅",
+};
+
 interface Step {
   key: StringKey;
-  done: boolean;
+  state: StepState;
 }
 
 /**
  * Procurement Status Tracker — UI/UX spec screen 10, wired to real-time listeners (Master Spec
  * build order step 4/5). This is the anti-corruption differentiator from the Winning Strategy
  * doc: every weighing/quality-check write the operator makes reaches this screen live.
- * Payment simulation isn't part of any build order step done so far, so the "Payment" tick
- * stays honestly unticked until something actually writes to payments/ — it deliberately does
- * NOT approximate that from booking.status, which now flips to "completed" the moment
- * quality-check finishes regardless of payment.
+ * The payment row reads the payments/ collection directly and deliberately does NOT approximate
+ * from booking.status, which flips to "completed" the moment quality-check finishes regardless
+ * of payment. It only ticks on a genuine "completed" payment; while the money is raised but
+ * unsettled it shows "in process" plus the date the farmer was promised.
  */
 export function ProcurementStatusScreen({ navigation }: Props) {
   const { t } = useLanguage();
@@ -106,14 +121,21 @@ export function ProcurementStatusScreen({ navigation }: Props) {
   const qualityChecked = !!procurement && procurement.qualityStatus !== "pending";
   const accepted = procurement?.qualityStatus === "accepted";
   const paid = payment?.status === "completed";
+  // submitQualityCheck() raises the payment doc with status "processing" the moment the lot is
+  // accepted, so the row can say so honestly instead of sitting blank until settlement days later.
+  const paymentProcessing = payment?.status === "processing";
 
   const steps: Step[] = [
-    { key: "procStepBooked", done: true },
-    { key: "procStepArrived", done: arrived },
-    { key: "procStepWeighed", done: weighed },
-    { key: "procStepQualityChecked", done: qualityChecked },
-    { key: "procStepAccepted", done: accepted },
-    { key: "procStepPayment", done: paid },
+    { key: "procStepBooked", state: "done" },
+    { key: "procStepArrived", state: arrived ? "done" : "pending" },
+    { key: "procStepWeighed", state: weighed ? "done" : "pending" },
+    { key: "procStepQualityChecked", state: qualityChecked ? "done" : "pending" },
+    { key: "procStepAccepted", state: accepted ? "done" : "pending" },
+    paid
+      ? { key: "procStepPayment", state: "done" }
+      : paymentProcessing
+        ? { key: "procStepPaymentProcessing", state: "active" }
+        : { key: "procStepPayment", state: "pending" },
   ];
 
   return (
@@ -124,8 +146,8 @@ export function ProcurementStatusScreen({ navigation }: Props) {
       <View style={styles.list}>
         {steps.map((step) => (
           <View key={step.key} style={styles.row}>
-            <Text style={styles.checkbox}>{step.done ? "✅" : "⬜"}</Text>
-            <Text style={[styles.stepLabel, !step.done && styles.stepLabelPending]}>
+            <Text style={styles.checkbox}>{STEP_ICON[step.state]}</Text>
+            <Text style={[styles.stepLabel, step.state === "pending" && styles.stepLabelPending]}>
               {t(step.key)}
             </Text>
           </View>
@@ -143,6 +165,14 @@ export function ProcurementStatusScreen({ navigation }: Props) {
           {t("procPriceDetail")
             .replace("{rate}", String(procurement.pricePerUnit))
             .replace("{amount}", String(Math.round(procurement.actualWeight * procurement.pricePerUnit)))}
+        </Text>
+      )}
+      {paymentProcessing && payment?.expectedPaymentDate && (
+        <Text style={styles.detail}>
+          {t("procExpectedPaymentDate").replace(
+            "{date}",
+            formatPaymentDate(payment.expectedPaymentDate)
+          )}
         </Text>
       )}
     </ScreenContainer>

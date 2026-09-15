@@ -883,6 +883,46 @@ export interface QualityCheckInput {
  * farmer's account days later, and claiming otherwise on the Procurement Status tracker would
  * undercut the transparency the tracker exists for.
  */
+/**
+ * How many days after acceptance the farmer is told to expect the money.
+ *
+ * Not a spec number. MSP procurement is supposed to settle within 72 hours of the purchase, so
+ * three days is the honest promise to print — and printing a date at all is the point: "payment
+ * processing" with no date is exactly the open-ended limbo farmers are made to live in today,
+ * where nobody will say when. A single named constant so the promise is changed in one place if
+ * a state's actual settlement window differs.
+ */
+export const PAYMENT_SETTLEMENT_DAYS = 3;
+
+/**
+ * `from` plus `days`, as a "YYYY-MM-DD" calendar date in local time.
+ *
+ * Deliberately not toISOString().slice(0, 10) — that converts to UTC first, which in IST (UTC+5:30)
+ * silently reports the *previous* day for anything before 05:30, so a payment accepted at 9am
+ * would promise a date one day early.
+ */
+export function expectedPaymentDate(from: Date, days: number = PAYMENT_SETTLEMENT_DAYS): string {
+  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() + days);
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * A "YYYY-MM-DD" date as "DD-MM-YYYY" for display.
+ *
+ * Deliberately numeric rather than a month name: the app ships in 12 languages and a localized
+ * month table would be twelve more sets of strings to keep in step, while DD-MM-YYYY is the form
+ * already printed on every Indian form a farmer has ever filled in. Returns the input unchanged
+ * if it isn't a plain date, so an older payment doc without the field can't blank the line.
+ */
+export function formatPaymentDate(isoDate: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  if (!match) return isoDate;
+  const [, year, month, day] = match;
+  return `${day}-${month}-${year}`;
+}
+
 export async function submitQualityCheck(input: QualityCheckInput): Promise<void> {
   const procurementRef = doc(db, COLLECTIONS.procurement, input.procurementId);
   const bookingRef = doc(db, COLLECTIONS.bookings, input.bookingId);
@@ -892,6 +932,10 @@ export async function submitQualityCheck(input: QualityCheckInput): Promise<void
   const paymentNotificationRef = doc(collection(db, COLLECTIONS.notifications));
   const accepted = input.decision === "accept";
   const payableAmount = Math.round(input.actualWeight * input.pricePerUnit);
+  // Computed on the device rather than from serverTimestamp() because the farmer is promised a
+  // calendar date, and a date has to exist before the write so the notification can quote the
+  // same one the payment doc carries.
+  const dueDate = expectedPaymentDate(new Date());
 
   await runTransaction(db, async (tx) => {
     // All reads (across every branch) must happen before any writes below, per Firestore
@@ -945,13 +989,16 @@ export async function submitQualityCheck(input: QualityCheckInput): Promise<void
         amount: payableAmount,
         status: "processing",
         transactionReference: null,
+        expectedPaymentDate: dueDate,
       };
       tx.set(paymentRef, payment);
 
       const paymentNotification: AppNotification = {
         farmerId: input.farmerId,
         type: "payment_processing",
-        message: `भुगतान प्रक्रिया में: ₹${payableAmount} (${input.actualWeight} × ₹${input.pricePerUnit})।`,
+        message:
+          `भुगतान प्रक्रिया में: ₹${payableAmount} (${input.actualWeight} × ₹${input.pricePerUnit})। ` +
+          `अपेक्षित तारीख: ${formatPaymentDate(dueDate)}।`,
         channel: "in_app",
         status: "unread",
         createdAt: serverTimestamp() as unknown as AppNotification["createdAt"],

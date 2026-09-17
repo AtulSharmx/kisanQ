@@ -26,25 +26,21 @@ function FarmerRoot() {
     );
   }
 
-  // Missing Details Polish sec. 5: a returning farmer stays logged in and skips straight to
-  // the dashboard; only a fresh device goes through Aadhaar+OTP registration.
+  // A returning farmer stays logged in; only a fresh device sees registration.
   return <AppNavigator initialRouteName={farmer ? "Home" : "Splash"} />;
 }
 
 /**
- * The web portal's NavigationContainer, mounted *inside* OperatorProvider so the URL routing
- * config can depend on who is logged in (see src/navigation/operatorLinking.ts for why it has to).
- * `key` remounts the container when the role changes, so logging in or out rebuilds the history
- * stack cleanly instead of leaving the previous role's entries behind the Back button.
+ * Mounted inside OperatorProvider because the URL config depends on who is logged in.
+ * The `key` remounts the container on a role change, so login/logout doesn't leave the previous
+ * role's entries behind the Back button.
  */
 function OperatorRoot() {
   const { session, initializing } = useOperator();
   const role = session?.role ?? null;
 
-  // A role change leaves the address bar showing the *old* role's screen (/queue after a logout,
-  // say), which no longer matches anything rendered. Rewrite it to this role's home — but only
-  // when the current path really isn't reachable, so an operator opening a bookmarked /queue
-  // still lands on the queue rather than being bounced to check-in.
+  // After a logout the address bar still shows the old role's screen. Rewrite it — but only if
+  // the path really is unreachable, so a bookmarked /queue still opens the queue.
   useEffect(() => {
     if (initializing) return;
     if (Platform.OS !== "web" || typeof window === "undefined") return;
@@ -52,10 +48,8 @@ function OperatorRoot() {
     window.history.replaceState(null, "", homePathForRole(role));
   }, [initializing, role]);
 
-  // Nothing is mounted until the stored session has been read back. Rendering the container
-  // early would mount it once with role === null — long enough to resolve the URL against the
-  // logged-out config and rewrite a perfectly good deep link (/queue) to /login before the real
-  // role ever arrives.
+  // Wait for the stored session. Mounting early means one render with role === null, which is
+  // long enough to resolve /queue against the logged-out config and rewrite it to /login.
   if (initializing) {
     return (
       <View style={styles.loading}>
@@ -71,9 +65,8 @@ function OperatorRoot() {
   );
 }
 
-// Master Spec sec. 2: "Operator & Admin: Same Expo codebase, run as a web build" — running as
-// web is exactly the signal used here to pick the Operator/Admin surface instead of the
-// Farmer App, rather than adding a separate mode-switcher screen the docs never mention.
+// The spec says operator and admin are the web build of this same codebase, so the platform is
+// the switch — no mode-picker screen.
 export default function App() {
   return (
     <SafeAreaProvider>
@@ -83,8 +76,7 @@ export default function App() {
             <OperatorRoot />
           </OperatorProvider>
         ) : (
-          // No `linking` on native: the Farmer App has no address bar, and Android's hardware
-          // back button already works off the same stack without one.
+          // No `linking` on native — no address bar, and Android's back button already works.
           <NavigationContainer>
             <FarmerProvider>
               <FarmerRoot />

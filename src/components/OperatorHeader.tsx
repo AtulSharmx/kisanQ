@@ -15,12 +15,7 @@ interface Props {
   actions: OperatorHeaderAction[];
 }
 
-/**
- * Shared Operator/Admin screen header — icon-labelled chip actions on the right, app name +
- * staff name on the left, matching AdminOverviewScreen/AdminDrilldownScreen's header exactly so
- * the whole staff-facing side of the app (not just Admin) has one consistent, non-basic-looking
- * chrome instead of every screen rolling its own plain-text-link header.
- */
+/** Shared staff header: app and staff name on the left, chip actions on the right. */
 export function OperatorHeader({ title, staffName, actions }: Props) {
   return (
     <View style={styles.header}>

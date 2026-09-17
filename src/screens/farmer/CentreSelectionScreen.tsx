@@ -91,11 +91,9 @@ export function CentreSelectionScreen({ route, navigation }: Props) {
     });
   }, [farmerId, cropType]);
 
-  // Live remaining capacity *and* published rates, for the one crop this farmer is bringing —
-  // these are the pieces of this screen's data a farmer benefits from seeing update without
-  // reloading (an Accept elsewhere, an admin's manual increase, or an admin editing this
-  // season's rate all land here within the same second). Merged into the already-ranked list
-  // rather than recomputing distance/wait/hasSlots, which don't change live.
+  // Capacity and rates are the parts worth watching live — an Accept elsewhere or an admin
+  // edit lands here within the second. Merged into the ranked list rather than recomputing
+  // distance and wait, which don't change live.
   useEffect(() => {
     const unsubscribe = listenCropCapacityAcrossCentres(cropType, (byCentreId) => {
       setRanked((prev) =>

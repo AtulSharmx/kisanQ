@@ -38,11 +38,9 @@ const LANGUAGES: {
 ];
 
 /**
- * Admin Settings — language switcher + logout, reached from the Admin Overview header. Only
- * Admin Overview/Drilldown/Settings themselves are wired through the i18n system today (see the
- * comment above the adminOverviewTitle string group in i18n/strings.ts); switching language here
- * changes those three screens, not the rest of Operator's scan/weigh/quality-check flow, which
- * stays inline bilingual Hindi+English — a deliberately scoped first step, not the full picture.
+ * Language switcher and logout. Only the three Admin screens are wired through i18n so far —
+ * the operator's scan/weigh/quality flow is still inline bilingual Hindi+English, so switching
+ * here doesn't change it.
  */
 export function AdminSettingsScreen({ navigation }: Props) {
   const { t, lang, setLang } = useLanguage();
@@ -120,15 +118,13 @@ export function AdminSettingsScreen({ navigation }: Props) {
 const UNITS: CommodityUnit[] = ["quintal", "ton"];
 
 /**
- * The commodity master — the "don't hardcode wheat and rice" half of the feature. Anything added
- * here is immediately assignable a per-mandi capacity in the Drilldown, pickable by a farmer,
- * gradeable, priceable and bookable, with no code change: the doc id an admin creates *is* the
- * `cropType` string every other collection already keys on.
+ * The commodity master. A commodity added here is immediately capacity-assignable, pickable,
+ * gradeable and bookable, because the doc id an admin creates is the cropType string every
+ * other collection keys on.
  *
- * Deactivating rather than deleting is the only removal offered, deliberately — a commodity with
- * historical bookings, capacity rows and procurement records against it can't be made to have
- * never existed, and a hard delete would leave those rows pointing at nothing. Deactivated rows
- * drop out of every picker but stay readable wherever they're already referenced.
+ * Deactivating is the only removal offered: a commodity with bookings and procurement records
+ * against it can't be made never to have existed, and deleting would leave those pointing at
+ * nothing. Deactivated rows leave the pickers but stay readable where already referenced.
  */
 function CommoditiesSection() {
   const { t, lang } = useLanguage();

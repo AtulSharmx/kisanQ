@@ -39,10 +39,8 @@ function formatReadableDate(iso: string): string {
 }
 
 /**
- * Slot Booking -> Token screen (token half) — UI/UX spec screen 8. Sharing uses the native
- * share sheet (covers WhatsApp per the "shared-phone reality" note in the spec); a pixel-image
- * download of the card would need extra libraries (react-native-view-shot + expo-sharing) —
- * left as a follow-up rather than adding more dependencies for this pass.
+ * Sharing goes through the native share sheet, which covers WhatsApp. Saving the card as an
+ * image would need react-native-view-shot and expo-sharing — left out for now.
  */
 export function TokenScreen({ route, navigation }: Props) {
   const { bookingId } = route.params;

@@ -1,18 +1,14 @@
 /**
- * Photographs for the ten bundled commodities, keyed by the same `key`/`cropType` string
- * everything else in the app is keyed by.
+ * Photos for the ten bundled commodities, keyed by the same cropType string as everything else.
  *
- * Metro resolves `require()` of an asset at bundle time, so this has to be a literal, statically
- * written map — `require("../../assets/crops/" + key + ".jpg")` does not work and silently ships a
- * bundle with no images at all. That also means only *bundled* commodities can have a photo: an
- * admin-added commodity (see mergeCommodities in ./commodities.ts) has no file in the tree, so
- * cropImage() returns undefined for it and callers fall back to the commodity's emoji. A photo is
- * therefore a nicety on top of the icon, never a replacement for it.
+ * The map has to be written out literally: Metro resolves require() at bundle time, so
+ * require("../../assets/crops/" + key + ".jpg") ships a bundle with no images and no error.
+ * Only bundled commodities can have a photo — an admin-added one has no file, cropImage()
+ * returns undefined and the caller falls back to its emoji.
  *
- * Every image is an openly-licensed Wikimedia Commons photo downscaled to 320px on its long edge
- * (~30KB each, ~300KB for all ten) to stay inside the 50-100MB app-size ceiling the UI/UX spec
- * sets. Attribution for each one lives in assets/crops/CREDITS.md and is shown to users on the
- * Settings screen, which the CC BY / CC BY-SA licences require.
+ * All ten are openly-licensed Wikimedia Commons photos, downscaled to 320px on the long edge
+ * (~300KB total). The CC BY / CC BY-SA terms require attribution, which is in
+ * assets/crops/CREDITS.md and shown on the Settings screen.
  */
 import type { ImageSourcePropType } from "react-native";
 

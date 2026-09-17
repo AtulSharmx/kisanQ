@@ -35,12 +35,7 @@ function formatTime(notification: NotificationWithId): string {
   return value.toDate().toLocaleString();
 }
 
-/**
- * Notifications — real-time listener on notifications/{farmerId}, same pattern as the Live
- * Queue screen's listenQueueForCentre(). Every weighing/quality-check/call-next write the
- * operator makes now actually reaches this screen, not just a Firestore document nobody reads
- * (the collection was previously write-only from the farmer's side).
- */
+/** Live listener on the farmer's notifications — every operator write lands here. */
 export function NotificationsScreen({}: Props) {
   const { t } = useLanguage();
   const { farmerId } = useFarmer();

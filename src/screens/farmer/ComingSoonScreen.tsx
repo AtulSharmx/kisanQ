@@ -12,11 +12,9 @@ import { listCropsForFarmer, type CropWithId } from "../../services/firestoreSer
 type Props = NativeStackScreenProps<RootStackParamList, "ComingSoon">;
 
 /**
- * The remaining Home tile with no real backing data yet: Payment (nothing writes to payments/
- * — payment simulation isn't part of the build order steps done so far). Shows the documented
- * empty state (Missing Details Polish sec. 2) honestly rather than faking data — except My
- * Produce, which already has real crop data from registration. Notifications now has its own
- * screen (NotificationsScreen.tsx), backed by a real listenNotifications() listener.
+ * Backs two Home tiles. My Produce shows the farmer's real crops; Payment still shows the
+ * documented empty state rather than faking data, even though payment docs now exist — it has
+ * no screen of its own yet, so the money is only visible on the Procurement Status tracker.
  */
 export function ComingSoonScreen({ route, navigation }: Props) {
   const { titleKey } = route.params;

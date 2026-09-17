@@ -17,16 +17,12 @@ import { getCentreCropCapacity, submitQualityCheck } from "../../services/firest
 type Props = NativeStackScreenProps<OperatorStackParamList, "QualityCheck">;
 
 /**
- * Quality Check screen — UI/UX spec Operator screen 5: moisture %, grade, Accept/Reject with a
- * confirmation prompt before final submit (design principle 9 — confirm before anything
- * irreversible). Rejection: procurementStatus becomes "rejected", the farmer keeps their
- * produce with no payment obligation (Missing Details Polish sec. 8).
+ * Moisture %, grade and Accept/Reject behind a confirmation. On reject the farmer keeps their
+ * produce and owes nothing.
  *
- * The price field under Grade is the rate actually paid, in ₹ per unit of this commodity.
- * Picking a grade *pre-fills* it from whatever the admin configured for that grade at this
- * centre, but it stays fully editable — a grade letter is not a price, and the real number
- * varies by mandi and by season. Nothing here falls back to a built-in figure: with no
- * configured rate the field simply starts empty and the operator types it.
+ * The price field is the rate actually paid. Choosing a grade pre-fills the admin's rate for it
+ * but never locks it — a grade letter is not a price, and the real number varies by mandi and
+ * season. With no configured rate the field starts empty and the operator types one.
  */
 export function QualityCheckScreen({ route, navigation }: Props) {
   const {
@@ -73,10 +69,8 @@ export function QualityCheckScreen({ route, navigation }: Props) {
 
   const onPickGrade = (g: string) => {
     setGrade(g);
-    // Pre-fills, never locks — and only while the operator hasn't typed their own number.
-    // Overwriting a rate someone deliberately entered would be the easy way to pay the wrong
-    // figure without noticing; re-filling one this screen put there itself is just keeping the
-    // suggestion in step with the chosen grade.
+    // Only while the operator hasn't typed their own number: overwriting a rate someone
+    // entered deliberately is the easy way to pay the wrong figure without noticing.
     if (priceTouched) return;
     const configured = gradePrices[g];
     setPriceText(configured != null ? String(configured) : "");

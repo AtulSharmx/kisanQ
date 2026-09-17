@@ -1,10 +1,7 @@
 /**
- * Mocked Aadhaar+OTP identity flow — docs/KisanQ_Master_Technical_Spec.md section 2 and
- * docs/KisanQ_PPT_Script.md slide 7 explicitly call this out as mocked for the prototype.
- * Never attempt to integrate a real UIDAI API here (CLAUDE.md stack rule).
- *
- * The raw Aadhaar number is used only in-memory to derive demo profile data and a
- * referenceToken — it is never persisted (CLAUDE.md rule 5 / Master Spec identityVerification).
+ * Mocked Aadhaar + OTP. The spec calls for this to stay mocked — never wire a real UIDAI API in
+ * here. The raw number is used in memory to derive demo profile data and a referenceToken, and
+ * is never persisted.
  */
 
 export interface MockProfile {

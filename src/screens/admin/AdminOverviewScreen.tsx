@@ -17,13 +17,7 @@ interface Card {
   accent?: boolean;
 }
 
-/**
- * Admin Overview — UI/UX spec Admin screen 1. Real-time top counters as icon cards, with a
- * proper header (Settings + District→Centre + Logout as distinct tappable chips, not bare text
- * links) matching the same visual language (icons, shadow.card, press feedback) the Farmer app
- * already has — this screen previously had none of that, which read as noticeably more basic
- * than the rest of the app.
- */
+/** Real-time counters as icon cards, with the same chip header as the other staff screens. */
 export function AdminOverviewScreen({ navigation }: Props) {
   const { t } = useLanguage();
   const { staffName, logout } = useOperator();

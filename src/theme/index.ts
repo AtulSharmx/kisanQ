@@ -47,12 +47,9 @@ export const radius = {
 };
 
 /**
- * Cross-platform shadow for elements meant to feel "raised" (info cards, the confirm dialog,
- * floating action buttons) — needs both the shadow* properties (iOS, and web via
- * react-native-web's CSS box-shadow mapping) and elevation (Android), since neither alone
- * covers every surface this app runs on. Don't apply this to repeated list/selection rows
- * (crop pickers, slot grids, queue rows) — a shadow reads as "this one thing floats above the
- * page," not as decoration for every row in a list.
+ * Raised-element shadow. Needs both the shadow* props (iOS and web) and elevation (Android) —
+ * neither alone covers every surface this app runs on. Not for repeated list rows: a shadow
+ * means "this one thing floats", not decoration for every row.
  */
 export const shadow = {
   card: {

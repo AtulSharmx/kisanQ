@@ -13,31 +13,19 @@ interface Props {
 }
 
 /**
- * Common screen chrome: off-white background, persistent Home + Help buttons (UI/UX spec).
- * When the Home FAB is shown it's absolutely positioned at `top: 12` over the content (see
- * HomeFab.tsx), so the default `spacing.lg` top padding isn't enough to clear it — a
- * left-aligned screen title (Settings, Notifications, Procurement Status, ...) starts at the
- * same top-left corner as the FAB and renders half-hidden behind it. Bump the top padding to
- * clear the FAB's full height whenever it's actually shown; screens that pass `showHome={false}`
- * (Home itself) keep the tighter default.
+ * Common screen chrome: off-white background, persistent Home and Help buttons.
  *
- * `scroll` renders a genuinely different component (ScrollView vs plain View), not just a style
- * switch — a plain `View` has no `contentContainerStyle` prop, so an earlier version of this
- * component that picked `Content = scroll ? ScrollView : View` and always passed
- * `contentContainerStyle` silently dropped ALL padding (not just the top-clearance fix above) on
- * every `scroll={false}` screen — Select a Centre, Choose a Time Slot, Choose your Village,
- * Preferred Centre. TypeScript didn't catch it because JSX prop-checking against a component
- * type that's a runtime union (`typeof ScrollView | typeof View`) doesn't reliably reject a prop
- * only one branch accepts. Branching the JSX itself, not just the style, avoids the whole class
- * of bug — each branch only ever receives props its real component type supports.
+ * The two `scroll` branches are written out rather than picking a component into a variable.
+ * A plain View has no `contentContainerStyle`, so the earlier
+ * `Content = scroll ? ScrollView : View` version silently dropped all padding on every
+ * scroll={false} screen — and TypeScript didn't catch it, because prop-checking against a
+ * runtime union of component types doesn't reject a prop only one branch accepts.
  */
 export function ScreenContainer({ children, scroll = true, showHome = true, showHelp = true }: Props) {
+  // Both FABs float over the content, so reserve the strips they sit in here rather than
+  // asking every screen to remember a spacer. Without the bottom one, the right edge of a
+  // full-width Continue button sits under the Help FAB and a tap there dials instead.
   const topPadding = showHome ? touchTarget + spacing.lg : spacing.lg;
-  // The Help FAB floats over the bottom-right corner (bottom: 20, height: touchTarget), so a
-  // screen whose last element is a full-width action button — Continue, Book Slot, Save — had its
-  // right edge sitting underneath it: a tap there hit the dialer instead of the button, and the
-  // FAB itself read as "part of the button" rather than a separate control. Reserve the strip it
-  // occupies whenever it's shown, rather than asking every screen to remember its own spacer.
   const bottomPadding = showHelp ? touchTarget + spacing.lg + spacing.md : spacing.xl;
 
   if (scroll) {

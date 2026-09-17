@@ -1,13 +1,7 @@
 /**
- * The one place any screen gets the commodity list from. Subscribes to the live `commodities`
- * collection and merges it over the bundled defaults (see src/data/commodities.ts), so:
- *   - a commodity an admin adds appears in the farmer's picker, the admin's capacity assigner
- *     and the operator's pricing without a rebuild; and
- *   - the app still shows a full, translated picker on an empty/offline Firestore, because the
- *     bundled list is the starting point rather than a fallback that only kicks in on error.
- *
- * `all` includes deactivated commodities (the Admin Settings list needs them to offer
- * reactivation); `commodities` is the sellable subset every other screen should render.
+ * Where every screen gets the commodity list. Subscribes to the live collection and merges it
+ * over the bundled defaults, so an admin's new commodity appears without a rebuild and an empty
+ * or offline Firestore still shows a full translated picker.
  */
 import { useEffect, useState } from "react";
 import {

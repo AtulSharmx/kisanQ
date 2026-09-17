@@ -1,138 +1,122 @@
-# 🌾 KisanQ
+# KisanQ
 
-**Smart Farmer Procurement & Queue Management Platform**
-Prototype for **SIH26032** — Ministry of Consumer Affairs, Food & Public Distribution
+Smart Farmer Procurement & Queue Management Platform — prototype for **SIH26032**
+(Ministry of Consumer Affairs, Food & Public Distribution).
 
-![Expo](https://img.shields.io/badge/Expo-SDK%2057-000020?logo=expo&logoColor=white)
-![React Native](https://img.shields.io/badge/React%20Native-0.86-61DAFB?logo=react&logoColor=black)
-![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
-![Firebase](https://img.shields.io/badge/Firebase-Firestore%20%2B%20Auth-FFCA28?logo=firebase&logoColor=black)
-![License](https://img.shields.io/badge/License-MIT-green.svg)
+Expo SDK 57 · React Native 0.86 · TypeScript · Firebase Firestore · MIT licensed
 
----
+## Live demo
 
-## 🚀 Live demo
-
-No local setup needed to try it — both surfaces are deployed against the real Firebase backend:
+Both surfaces run against the real Firebase backend, so there is nothing to set up to try them:
 
 | Surface | Link |
 |---|---|
-| **Operator / Admin** (web) | **[kisanq-farmer.web.app](https://kisanq-farmer.web.app)** |
-| **Farmer app** (Android) | **[Download APK](https://expo.dev/accounts/atulshxrma/projects/kisanq/builds/b64d0caf-3ba5-4e09-815a-7b32e5cd3d2f)** — open the link on an Android phone (or scan its QR code) and tap Install. No Play Store, no Expo account needed. |
+| Operator / Admin (web) | [kisanq-farmer.web.app](https://kisanq-farmer.web.app) |
+| Farmer app (Android) | [Download APK](https://expo.dev/accounts/atulshxrma/projects/kisanq/builds/b64d0caf-3ba5-4e09-815a-7b32e5cd3d2f) — open on an Android phone and tap Install. No Play Store or Expo account needed. |
 
-See [Demo credentials](#demo-credentials) below for the Staff ID/PIN to log into Operator/Admin.
-Farmers register through the app itself (any 12-digit Aadhaar, OTP shown on-screen).
+Staff logins are under [Demo credentials](#demo-credentials). Farmers register in the app
+itself — Aadhaar entry accepts any 12 digits and the OTP is shown on screen.
 
-> **Note:** the Android build link is an EAS internal-distribution artifact, which expires
-> ~14 days after it was built — this one on 2026-09-29. If it's gone stale, rebuild it with
-> `eas build --platform android --profile preview` (see [`eas.json`](eas.json)) — everything
-> needed (Firebase config, keystore) is already configured on the EAS project.
-
----
+The Android link is an EAS internal-distribution build, which expires about 14 days after it
+was made — this one on 2026-09-29. Rebuild with
+`eas build --platform android --profile preview`; the EAS project already holds the keystore
+and Firebase config.
 
 ## The problem
 
-A farmer brings their crop to an MSP procurement centre and hands it over — and from that
-moment on, everything is opaque. How many people are ahead in line? Has the weighing even
-happened yet? What grade did the quality check give it? Was the weight recorded correctly, or
-quietly under-reported? Registration and slot booking have gone digital in most states, but
-what happens *inside* the centre is still largely paper-based — which is exactly where
-under-weighing, arbitrary quality cuts, and unofficial commissions slip in, even in states that
-already have digital gate-pass systems.
+A farmer brings their crop to an MSP procurement centre, hands it over, and from that point on
+everything is opaque. How many people are ahead? Has the weighing happened? What grade did the
+quality check give? Was the weight recorded honestly?
 
-## What KisanQ does differently
+Registration and slot booking are digital in most states. What happens *inside* the centre
+mostly isn't, and that is where under-weighing, arbitrary quality cuts and unofficial
+commissions live.
 
-KisanQ pushes every weighing entry and every quality-check entry to the farmer's own phone the
-moment the operator records it — not after the fact, not on request. That's a timestamped
-digital trail that's much harder to quietly alter than a paper register, and it's the one thing
-no existing state procurement portal (Haryana e-Kharid, Punjab Anaaj Kharid, Rajasthan MSP
-Portal, UP e-Procurement) offers today: **live queue position** combined with **real-time
-produce transparency**, in one place.
+## What KisanQ does about it
 
-One Firebase backend, three access surfaces built from a single Expo codebase:
+Every weighing entry and every quality-check entry is pushed to the farmer's own phone the
+moment the operator records it. That makes a timestamped trail that is harder to quietly alter
+than a paper register. Live queue position and real-time produce transparency in one place is
+the combination the existing state portals (Haryana e-Kharid, Punjab Anaaj Kharid, Rajasthan
+MSP Portal, UP e-Procurement) don't offer.
+
+One Firebase backend, three surfaces from one Expo codebase:
 
 | Surface | Who | Runs as |
 |---|---|---|
-| **Farmer App** | Farmers, on their own phone | Native app via Expo Go |
-| **Operator Console** | Front-desk staff at a procurement centre | Web build, fixed desk |
-| **Admin Dashboard** | District/state administrators | Web build, fixed desk |
+| Farmer App | farmers, on their own phone | native, via Expo Go or the APK |
+| Operator Console | front-desk staff at a centre | web build |
+| Admin Dashboard | district / state administrators | web build |
 
 ## Features
 
-**Farmer App**
-- 12 languages (Hindi, English, Punjabi, Bengali, Marathi, Gujarati, Telugu, Tamil, Kannada,
-  Malayalam, Odia, Urdu) — the very first screen keeps it to Hindi/English for a farmer's first
-  ever open, the full list lives in Settings
-- Village-first UI — icon pickers and steppers over free text, large touch targets, high contrast
-  for outdoor sunlight
-- Aadhaar + OTP registration (mocked for the prototype) with a biometric-fallback path
-- Advance booking — book a slot for today, tomorrow, or the day after, not just same-day
-- Centre selection ranked by live estimated wait, not just distance, showing each centre's live
-  remaining daily buying capacity for the crop being booked
-- **Price range before you travel** — each centre shows the ₹ range that mandi is actually paying
-  for the crop being booked (lowest to highest grade), so a farmer knows the best realistic price
-  for their produce *before* loading the tractor
-- **Express slot** — a fixed-fee, capped-quota priority option (Tatkal-style, never an open
-  bidding war) for a farmer who needs to skip ahead
-- Digital token with QR code, shareable via WhatsApp; cancel a not-yet-checked-in booking any time
-- **Live Queue** — "X people ahead of you," computed live from the centre's actual queue state,
-  not a number frozen at check-in
-- **Procurement Status tracker** — Booked → Arrived → Weighed → Quality-checked → Accepted →
-  Payment, ticking in real time as the operator works
-- **Payment in process, with a date** — the moment a lot is accepted the payment row turns to
-  "payment in process" and prints the date the money is expected (acceptance + 3 days, the MSP
-  72-hour settlement norm), alongside the rate and total. The row only ticks green on an actual
-  settled payment — "processing with no date" is exactly the open-ended limbo the tracker exists
-  to end. Payments are simulated; no money moves
-- Real-time in-app Notifications for every stage change
-- **Photographs, not emoji, in the crop picker** — ten openly-licensed Wikimedia Commons photos
-  (credited in Settings and in [`assets/crops/CREDITS.md`](assets/crops/CREDITS.md)), so bajra and
-  jowar are told apart by sight rather than by reading the label. A commodity an admin adds at
-  runtime falls back to its emoji
-- **A Help button on every screen** — one tap to the Kisan Call Centre, from the language-select
-  screen onwards, never covered by the screen's own buttons
+### Farmer App
 
-**Operator Console**
-- Staff ID + PIN login, scoped to one procurement centre, with its own Settings (language + logout)
-- QR scan check-in with an always-visible manual token-entry fallback
-- Live queue management (Waiting / Processing / Completed) with one-tap "Call Next"
-- Weighing (expected vs. actual) and quality check (moisture %, grade, Accept/Reject with a
-  confirm step) — both push an instant notification to the farmer
-- **Rate entry on the quality check** — the operator types the ₹/unit actually being paid (never
-  a hardcoded per-grade number). Picking a grade pre-fills that grade's rate as set by the admin,
-  but the typed value always wins, and the payable total (`weight × rate`) is shown live before
-  Accept. Accepting without a rate is blocked. Accepting raises the payment and stamps the
-  expected payment date the farmer sees on their tracker
-- **Real URLs and a back button** — every staff screen has its own path (`/checkin`, `/queue`,
-  `/weighing`, `/quality-check`, `/admin`, `/admin/centres`, …), so browser Back and Forward
-  work, a reload keeps you where you were, and a screen can be bookmarked or shared. Weighing
-  and Quality Check carry a back chip to the queue; neither writes anything until its confirm
-  button, so leaving is safe
+- 12 languages (Hindi default). The first screen offers only Hindi and English so a first-time
+  open isn't a wall of choices; the full list is in Settings.
+- Village-first UI: icon pickers and steppers instead of typing, ~50dp touch targets, high
+  contrast for outdoor sunlight, a Help button on every screen.
+- Aadhaar + OTP registration (mocked), with a biometric fallback path.
+- Advance booking for today, tomorrow or the day after.
+- Centre selection ranked by live estimated wait, showing each centre's remaining daily buying
+  capacity for the crop being booked.
+- Price range per centre — the ₹ range that mandi is actually paying for this crop, lowest to
+  highest grade, so a farmer knows the realistic price before loading the tractor.
+- Express slot: a fixed-fee, capped-quota priority booking. Capped deliberately, so it can't
+  turn into a bidding war.
+- Digital token with QR code, shareable on WhatsApp. A booking can be cancelled until check-in.
+- Live Queue — "X people ahead of you", computed from the centre's current queue rather than a
+  number frozen at check-in.
+- Procurement Status tracker: Booked → Arrived → Weighed → Quality-checked → Accepted →
+  Payment, ticking over in real time as the operator works.
+- Payment row shows the rate, the total and the date the money is expected (acceptance + 3
+  days, the MSP 72-hour settlement norm). It only turns green on an actual settled payment.
+  Payments are simulated — no money moves.
+- Real-time in-app notifications for every stage change.
+- Photographs rather than emoji in the crop picker: ten openly-licensed Wikimedia Commons
+  photos (credited in Settings and in [`assets/crops/CREDITS.md`](assets/crops/CREDITS.md)), so
+  bajra and jowar can be told apart without reading. Runtime-added commodities fall back to an
+  emoji.
 
-**Admin Dashboard**
-- Centre/farmer/booking overview counters, with its own Settings (language + logout)
-- District → centre drill-down with capacity-utilization flagging for overloaded centres
-- **Daily Buying Capacity** — set a daily quintal limit per centre *per crop* (a mandi can be
-  buying more than one crop the same day), auto-decremented the moment a booking is Accepted, with
-  a manual top-up control for a deliberate policy increase. Capacity is tracked per (centre, crop)
-  pair, never as a shared pool — wheat running out never blocks a rice booking, and a booking that
-  doesn't fit is rejected with the exact quintals still available
-- **Commodity master** — wheat and paddy aren't hardcoded. Commodities live in their own Firestore
-  collection with a name, icon and unit (quintal/ton); an admin adds a new one from Settings at
-  runtime and it immediately appears everywhere — capacity rows, grade pricing, the farmer's crop
-  picker — with no code change and no redeploy. Commodities are deactivated rather than deleted, so
-  a crop already referenced by past bookings can never dangle
-- **Grade-based pricing** — under each crop's capacity row, the admin types the ₹/unit for grade
-  A, B and C separately (typed, never fixed per grade letter). Those rates drive the farmer's
-  price range and pre-fill the operator's quality-check rate field
+### Operator Console
+
+- Staff ID + PIN login, scoped to one centre.
+- QR scan check-in, with manual token entry always visible as a fallback.
+- Live queue management (Waiting / Processing / Completed) with one-tap Call Next.
+- Weighing (expected vs actual) and quality check (moisture %, grade, Accept/Reject behind a
+  confirm step). Both notify the farmer immediately.
+- Rate entry at quality check: the operator types the ₹/unit actually being paid. Choosing a
+  grade pre-fills the admin's rate for it, but the typed value always wins, the payable total
+  is shown live, and accepting without a rate is blocked.
+- Every staff screen has its own URL (`/checkin`, `/queue`, `/weighing`, `/quality-check`,
+  `/admin`, …), so browser Back works, a reload keeps its place, and screens can be bookmarked.
+  Neither Weighing nor Quality Check writes anything before its confirm button, so leaving
+  mid-screen is safe.
+
+### Admin Dashboard
+
+- Centre / farmer / booking counters.
+- District → centre drill-down, flagging centres above the utilization threshold.
+- Daily Buying Capacity: a quintal limit per centre *per crop*, since one mandi buys several
+  crops the same day. Decremented automatically when a lot is accepted, with a manual top-up
+  for a deliberate policy increase. Tracked per (centre, crop) pair, never pooled — wheat
+  running out never blocks a paddy booking, and a booking that doesn't fit is refused with the
+  quintals still available.
+- Commodity master: wheat and paddy aren't hardcoded. Commodities are Firestore rows with a
+  name, icon and unit; one added from Settings appears in capacity rows, grade pricing and the
+  farmer's crop picker immediately, with no redeploy. They are deactivated rather than deleted
+  so past bookings can't dangle.
+- Grade-based pricing: the ₹/unit for grades A, B and C per crop, typed in rather than derived
+  from the grade letter. These drive the farmer's price range and the operator's pre-fill.
 
 ## Tech stack
 
-- **Frontend:** React Native + Expo (TypeScript) — one codebase, native build for farmers, web
-  build for operators/admins
-- **Backend:** Firebase Firestore, with real-time `onSnapshot` listeners (no polling) and
-  Firebase Anonymous Auth backing role-scoped security rules
-- **Identity:** Aadhaar + OTP is mocked end-to-end — this prototype never calls a real UIDAI API
+- **Frontend:** React Native + Expo (TypeScript). One codebase — native for farmers, web build
+  for staff, routed by `Platform.OS` in `App.tsx`.
+- **Backend:** Firebase Firestore with `onSnapshot` listeners, no polling. Firebase Anonymous
+  Auth backs the role-scoped security rules.
+- **Identity:** Aadhaar + OTP is mocked end to end. This prototype never calls a real UIDAI API,
+  and never stores a raw Aadhaar number — only a reference token.
 
 ## Getting started
 
@@ -141,40 +125,39 @@ npm install
 cp .env.example .env
 ```
 
-Fill in `.env` with your Firebase project's config (Firebase Console → Project Settings →
-General → Your apps → SDK setup and configuration). `.env` is git-ignored — never commit real
-values.
+Fill `.env` with your Firebase web config (Firebase Console → Project Settings → General → Your
+apps → SDK setup and configuration). `.env` is git-ignored; don't commit real values.
 
 ```bash
-npm start        # Farmer app — scan the QR with Expo Go
-npm run web      # Operator / Admin web build
+npm start     # Farmer app — scan the QR with Expo Go
+npm run web   # Operator / Admin
 ```
 
-### Firebase / Firestore setup
+### Firebase setup
 
-1. Create a Firebase project (or use an existing one) with **Firestore** enabled.
-2. Add a Web app in the project and copy its config into `.env` (see above).
-3. **Enable Anonymous authentication:** Firebase Console → Authentication → Sign-in method →
-   add **Anonymous**. The mocked Aadhaar+OTP flow never touches a real UIDAI API, but
-   `firestore.rules` still need *some* real `request.auth` to scope access by owner — so every
-   device silently signs in anonymously on launch and that uid becomes the farmerId (see
-   `src/context/FarmerContext.tsx`). Without this enabled, registration fails with a
-   `permission-denied` error.
-4. Link the Firebase CLI to your project:
+1. Create a Firebase project with Firestore enabled.
+2. Add a Web app and copy its config into `.env`.
+3. **Enable Anonymous authentication** (Authentication → Sign-in method → Anonymous). The
+   mocked Aadhaar flow mints no real auth token, but the security rules still need a real
+   `request.auth` to scope access by owner, so every device signs in anonymously on launch and
+   that uid becomes the farmerId. Without this, registration fails with `permission-denied`.
+4. Link the CLI:
    ```bash
    npx firebase login
    npx firebase use --add
    ```
-5. Deploy security rules and indexes (re-run any time `firestore.rules` or
-   `firestore.indexes.json` change):
+5. Deploy rules and indexes (re-run whenever `firestore.rules` or `firestore.indexes.json`
+   change):
    ```bash
    npx firebase deploy --only firestore:rules,firestore:indexes
    ```
-6. Seed demo data (centres, today's slots, a few bookings already ahead of a live demo token —
-   see `docs/KisanQ_Missing_Details_Polish.md` section 9):
-   - Firebase Console → Project Settings → Service Accounts → **Generate new private key**
-   - Save the downloaded file as `serviceAccountKey.json` in the repo root (git-ignored)
+6. Seed demo data — centres, today's slots, and a few bookings already queued ahead of the demo
+   token:
+   - Project Settings → Service Accounts → Generate new private key
+   - save it as `serviceAccountKey.json` in the repo root (git-ignored)
    - `npm run seed`
+
+`npm run reset` clears rehearsal traffic before a demo.
 
 ### Demo credentials
 
@@ -185,125 +168,114 @@ npm run web      # Operator / Admin web build
 | Operator — Sonipat | `staff-op-3` | `1234` |
 | Admin | `staff-admin-1` | `9999` |
 
-Farmers register through the app itself (Aadhaar entry accepts any 12 digits; the OTP screen
-shows the demo code on-screen).
-
 ## Deployment
 
-Both live-demo surfaces above are deployed from this same codebase, against the same Firebase
-project — no separate backend to stand up.
+Both live surfaces deploy from this codebase against the same Firebase project.
 
-**Operator / Admin (web) → Firebase Hosting:**
+Operator / Admin → Firebase Hosting:
 
 ```bash
-npx expo export --platform web   # static build, output to dist/
+npx expo export --platform web
 npx firebase deploy --only hosting
 ```
 
-`firebase.json`'s `hosting` config already points at `dist/` with a single-page-app rewrite
-(every route falls back to `index.html`, since routing is client-side via React Navigation).
+`firebase.json` already points hosting at `dist/` with a single-page rewrite, since routing is
+client-side.
 
-**Farmer app (Android) → EAS Build:**
+Farmer app → EAS Build:
 
 ```bash
 eas build --platform android --profile preview
 ```
 
-`eas.json`'s `preview` profile produces a directly-installable APK (`distribution: "internal"`,
-`buildType: "apk"`) rather than a Play Store bundle — no store review needed, just a shareable
-link/QR code. The EAS project already has the Android keystore and the `EXPO_PUBLIC_FIREBASE_*`
-values needed for the build set as [EAS environment variables](https://docs.expo.dev/eas/environment-variables/)
-(cloud builds don't see the local, git-ignored `.env` file, so these have to be set separately —
-`eas env:set preview --name <NAME> --value <VALUE>` for each one, matching `.env.example`).
+The `preview` profile builds an installable APK rather than a Play Store bundle. Cloud builds
+can't see the git-ignored `.env`, so the `EXPO_PUBLIC_FIREBASE_*` values are set as
+[EAS environment variables](https://docs.expo.dev/eas/environment-variables/) instead
+(`eas env:set preview --name <NAME> --value <VALUE>` for each key in `.env.example`).
 
 ## Project structure
 
 ```
 kisanQ/
-├── App.tsx                  # Entry point — routes Farmer vs Operator/Admin by Platform.OS
-├── firebaseConfig.ts         # Reads Firebase config from env vars
+├── App.tsx                   # Routes Farmer vs Operator/Admin by Platform.OS
+├── firebaseConfig.ts         # Firebase config from env vars
 ├── firestore.rules           # Role-scoped security rules
-├── firestore.indexes.json
-├── firebase.json             # Firestore + Hosting config (Operator/Admin web deploy)
-├── eas.json                  # EAS Build profiles (Farmer app Android APK)
+├── firebase.json             # Firestore + Hosting config
+├── eas.json                  # EAS Build profiles
 ├── scripts/
-│   ├── seed.ts               # Demo data seeder (npm run seed)
-│   └── reset.ts              # Wipes rehearsal traffic before a demo (npm run reset)
+│   ├── seed.ts               # Demo data (npm run seed)
+│   └── reset.ts              # Clears rehearsal traffic (npm run reset)
 ├── src/
 │   ├── screens/
 │   │   ├── farmer/           # Registration → token → live queue → procurement status
-│   │   ├── operator/         # Login → scan/check-in → live queue → weighing → quality check
-│   │   └── admin/            # Overview + district → centre drill-down
+│   │   ├── operator/         # Login → check-in → queue → weighing → quality check
+│   │   └── admin/            # Overview + drill-down + settings
 │   ├── services/
-│   │   ├── firestoreService.ts   # All Firestore reads/writes/listeners
-│   │   ├── mockAadhaar.ts        # Mocked Aadhaar+OTP lookup
+│   │   ├── firestoreService.ts   # All Firestore reads, writes and listeners
+│   │   ├── mockAadhaar.ts        # Mocked Aadhaar + OTP
 │   │   └── pinAuth.ts            # Staff PIN hashing
-│   ├── data/
-│   │   ├── commodities.ts     # Bundled fallback commodity list + label/unit helpers
-│   │   └── grades.ts          # Quality grades (A/B/C)
-│   ├── hooks/
-│   │   └── useCommodities.ts  # Live commodity master, Firestore rows over the bundled list
-│   ├── context/               # Farmer / Operator / Language React contexts
-│   ├── navigation/            # React Navigation stacks (Farmer + Operator/Admin)
-│   ├── components/            # Shared UI (buttons, dialogs, progress dots, status badges)
-│   ├── theme/                 # Colours, spacing, type scale — from the UI/UX spec
-│   ├── i18n/strings.ts        # UI copy in all 12 languages (Hindi default)
-│   └── types/firestore.ts     # TypeScript shape of every Firestore collection
-└── docs/                      # Full project specification (see below)
+│   ├── data/                 # Bundled commodities, grades, crop photos
+│   ├── hooks/                # useCommodities — Firestore rows over the bundled list
+│   ├── context/              # Farmer / Operator / Language contexts
+│   ├── navigation/           # React Navigation stacks
+│   ├── components/           # Shared UI
+│   ├── theme/                # Colours, spacing, type scale
+│   ├── i18n/strings.ts       # UI copy, 12 languages
+│   └── types/firestore.ts    # Shape of every Firestore collection
+└── docs/                     # Project specification
 ```
 
 ## Firestore data model
 
-See [`src/types/firestore.ts`](src/types/firestore.ts) for the TypeScript shape of every
-collection, and
-[`docs/KisanQ_Master_Technical_Spec.md`](docs/KisanQ_Master_Technical_Spec.md#3-data-model-firestore-collections)
-for the canonical spec:
-
 `farmers`, `identityVerification`, `crops`, `centres`, `slots`, `bookings`, `queue`,
 `procurement`, `payments`, `notifications`, `staff`, `staffSessions`, `tokenCounters`,
-`queuePositionCounters`, `commodities`, `centreCropCapacity` (the last six are internal, not in
-the Master Spec — see the comments in `src/types/firestore.ts`).
+`queuePositionCounters`, `expressSlotCounters`, `commodities`, `centreCropCapacity`.
 
-`commodities/{cropType}` is the runtime commodity master (name, icon, unit, `active`), and
-`centreCropCapacity/{centreId}_{cropType}` holds that mandi's daily capacity for that one
-commodity plus its per-grade `gradePrices` map — one row per (centre, crop) pair, which is what
-keeps each commodity's capacity and rates independent of every other commodity's.
+The last six aren't in the Master Spec — the counters exist to allocate token numbers, queue
+positions and Express slots atomically; `commodities` and `centreCropCapacity` back the runtime
+commodity master and per-crop capacity. `centreCropCapacity/{centreId}_{cropType}` holds one
+mandi's daily capacity for one commodity plus its `gradePrices` map, which is what keeps each
+commodity's capacity and rates independent of the others.
+
+Field-by-field shapes are in [`src/types/firestore.ts`](src/types/firestore.ts); the canonical
+spec is
+[`docs/KisanQ_Master_Technical_Spec.md`](docs/KisanQ_Master_Technical_Spec.md#3-data-model-firestore-collections).
 
 ## Build status
 
-All 7 steps of the Master Spec's build order are done:
+All seven steps of the Master Spec's build order are done: Firestore schema, farmer
+registration → token, operator check-in + live queue, the farmer's real-time Live Queue and
+Procurement Status, operator weighing + quality check, admin dashboard, and the farmer-app UI
+polish pass.
 
-| # | Step | Status |
-|---|---|---|
-| 1 | Firestore schema + Firebase project setup | ✅ |
-| 2 | Farmer App: registration → token generation | ✅ |
-| 3 | Operator: scan/check-in + live queue management | ✅ |
-| 4 | Farmer App: Live Queue + Procurement Status wired to real-time listeners | ✅ |
-| 5 | Operator: weighing + quality check | ✅ |
-| 6 | Admin dashboard | ✅ |
-| 7 | UI polish pass on the Farmer App | ✅ |
+Known limitations, all deliberate for a prototype:
 
-Known, documented gaps (not oversights — see `CLAUDE.md` and the relevant code comments for
-the reasoning): payment processing is simulated only and isn't wired up yet; staff PIN
-verification happens client-side (a Cloud Function would be needed to verify it server-side);
-and a handful of Firestore list-query security rules are intentionally broader than
-single-document rules because Firestore can't secure a list query with a role check that
-requires a `get()` call.
+- Payments are simulated. A payment doc is raised when a lot is accepted and shows as
+  "processing" with an expected date, but no gateway is contacted and nothing marks it settled.
+- Staff PIN verification happens on the client. A client that already knows a valid staff ID
+  could write a `staffSessions` doc without passing the PIN screen; closing that needs a Cloud
+  Function to verify the PIN server-side.
+- Some Firestore list-query rules are broader than the equivalent single-document rules.
+  Firestore can't secure a list query with a role check that needs a `get()` call, so reads on
+  `bookings`, `crops`, `queue` and `procurement` are scoped to any signed-in user. Writes stay
+  properly scoped. The real fix is custom claims minted by a Cloud Function, which needs the
+  Blaze plan.
+- The Admin Dashboard's counts are all-time, not per-day, and read whole collections. Fine at
+  demo scale, not beyond it.
 
 ## Documentation
 
-The full project specification lives in [`docs/`](docs/) — start with
-[`docs/KisanQ_Master_Technical_Spec.md`](docs/KisanQ_Master_Technical_Spec.md). Working rules
-for anyone (human or AI) contributing code are in [`CLAUDE.md`](CLAUDE.md).
+The specification lives in [`docs/`](docs/) — start with the Master Technical Spec. Working
+rules for contributors are in [`CLAUDE.md`](CLAUDE.md).
 
 | Doc | Covers |
 |---|---|
 | [`KisanQ_Master_Technical_Spec.md`](docs/KisanQ_Master_Technical_Spec.md) | Tech stack, data model, end-to-end flow, screen list, build order |
 | [`KisanQ_UIUX_Spec.md`](docs/KisanQ_UIUX_Spec.md) | Screen-by-screen UI detail, village-first design principles |
-| [`KisanQ_Missing_Details_Polish.md`](docs/KisanQ_Missing_Details_Polish.md) | Exact notification copy, empty/error states, token format, wait-time formula |
-| [`KisanQ_CrossQuestions_Reference.md`](docs/KisanQ_CrossQuestions_Reference.md) | Edge cases and ground-reality constraints the design accounts for |
+| [`KisanQ_Missing_Details_Polish.md`](docs/KisanQ_Missing_Details_Polish.md) | Notification copy, empty/error states, token format, wait-time formula |
+| [`KisanQ_CrossQuestions_Reference.md`](docs/KisanQ_CrossQuestions_Reference.md) | Edge cases and ground-reality constraints |
 | [`KisanQ_Winning_Strategy.md`](docs/KisanQ_Winning_Strategy.md) | The core differentiator and how it maps to judging criteria |
-| [`KisanQ_PPT_Script.md`](docs/KisanQ_PPT_Script.md) | Pitch script (background context) |
+| [`KisanQ_PPT_Script.md`](docs/KisanQ_PPT_Script.md) | Pitch script |
 
 ## License
 

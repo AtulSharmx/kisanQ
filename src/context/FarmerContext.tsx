@@ -14,11 +14,9 @@ interface FarmerContextValue {
   /** Call after registerFarmer() succeeds so the rest of the app sees the profile immediately. */
   setFarmer: (farmer: Farmer) => void;
   /**
-   * Signs out of the current anonymous session (Missing Details Polish sec. 5: "mobile+OTP is
-   * only needed again after an explicit logout"). onAuthStateChanged's existing `if (!user)`
-   * branch immediately starts a *new* anonymous session, so the next registration gets a fresh
-   * uid/farmerId — clearing farmer/farmerId here right away (rather than waiting on that round
-   * trip) avoids a flash of the old farmer's data before it resolves.
+   * onAuthStateChanged's `if (!user)` branch immediately starts a new anonymous session, so
+   * the next registration gets a fresh uid. Clearing state here rather than waiting for that
+   * round trip avoids a flash of the previous farmer's data.
    */
   logout: () => Promise<void>;
 }

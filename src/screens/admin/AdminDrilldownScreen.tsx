@@ -36,11 +36,9 @@ import type { Lang } from "../../i18n/strings";
 type Props = NativeStackScreenProps<OperatorStackParamList, "AdminDrilldown">;
 
 /**
- * District -> Centre Drill-down — UI/UX spec Admin screen 2. A table grouped by district
- * (rather than a separate district-picker step) since the underlying data is small enough at
- * demo scale to just show everything at once. Overloaded threshold isn't given a specific
- * number in the docs ("above a threshold") — OVERLOAD_THRESHOLD_PCT (80%) is a documented
- * choice, not a spec value.
+ * Grouped into one table rather than a district-picker step: at demo scale everything fits on
+ * screen at once. The 80% overload threshold is a chosen number — the spec only says "above a
+ * threshold".
  */
 export function AdminDrilldownScreen({ navigation }: Props) {
   const { t, lang } = useLanguage();
@@ -144,10 +142,9 @@ export function AdminDrilldownScreen({ navigation }: Props) {
 }
 
 /**
- * Daily Buying Capacity — one row per crop this centre has been configured with a capacity for
- * (a centre buying more than one crop on the same day, e.g. wheat and mustard together in Rabi
- * season, needs a separate number per crop — a single centre-wide ceiling can't tell you which
- * crop's capacity is actually the constraint), plus a form to configure a new crop.
+ * One row per crop this centre has a capacity configured for, plus a form to add another.
+ * Per crop, not per centre: a mandi buying wheat and mustard the same day needs to know which
+ * of the two is actually the constraint.
  */
 function CentreCapacitySection({
   centreId,
@@ -179,11 +176,8 @@ function CentreCapacitySection({
 }
 
 /**
- * View + manual increase for one already-configured (centre, crop) pair. View-only for the
- * current number (an admin should see the true, possibly-negative value for real oversight —
- * unlike the farmer-facing Centre Selection screen, this is deliberately not clamped to 0); the
- * increase itself is the only change this row can make — an admin can't decrease it directly
- * here, matching the "manual increase only" spec.
+ * Shows the true remaining number, not clamped at 0 like the farmer-facing screen — an admin
+ * doing oversight should see a negative. Increase is the only edit offered, per the spec.
  */
 function CapacityRow({
   capacity,
@@ -263,15 +257,9 @@ function CapacityRow({
 }
 
 /**
- * What this centre pays, per grade, for this one commodity — one free-text ₹ field per grade in
- * src/data/grades.ts. Deliberately typed rather than picked: the whole point of the feature is
- * that a grade letter is *not* a price, so nothing here maps "A" to a hardcoded number. An empty
- * field means "no rate published for this grade" (setCentreCropGradePrices drops it rather than
- * writing 0), which is what the farmer's Centre Selection range and the operator's pre-fill both
- * treat as "operator types it free-hand."
- *
- * Saved with a merge write onto the same {centreId}_{cropType} capacity doc, so it can never
- * clobber remainingCapacityQuintals, which operators are decrementing concurrently.
+ * One ₹ field per grade, typed rather than picked — a grade letter is not a price, so nothing
+ * here maps "A" to a number. Empty means no rate published, not zero, and the operator types
+ * one free-hand. Merged onto the capacity doc so it can't clobber the remaining count.
  */
 function GradePriceRow({
   centreId,
@@ -357,11 +345,9 @@ function GradePriceRow({
 }
 
 /**
- * Configures a new (centre, crop) pair's daily capacity for the first time — the only way a
- * crop becomes capacity-gated at all (see the opt-in note on CentreCropCapacity in
- * types/firestore.ts). Re-picking an already-configured crop is allowed (addCentreCropCapacity
- * treats it as a deliberate reset back to full, not an error) — crops with an existing row are
- * marked with a trailing " •" here so that's a visible, deliberate choice, not an accident.
+ * The only way a crop becomes capacity-gated. Re-picking a configured crop resets it to full,
+ * which is allowed — already-configured crops carry a trailing " •" so that's a deliberate
+ * choice rather than an accident.
  */
 function AddCapacityRow({
   centreId,

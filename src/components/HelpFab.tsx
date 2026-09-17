@@ -5,10 +5,8 @@ import { colors, radius, shadow, touchTarget } from "../theme";
 import { useLanguage } from "../context/LanguageContext";
 
 /**
- * Persistent bottom-right help button — "one-tap connect to a human" (UI/UX spec principle
- * 10). Opens the phone dialer on the Kisan Call Centre number the Winning Strategy doc cites
- * as the already-trusted channel to model help access on (1800-180-1551); it does not place
- * the call itself, just opens the dialer for the farmer to confirm.
+ * One-tap connection to a human. Opens the dialer on the Kisan Call Centre number
+ * (1800-180-1551) rather than placing the call, so the farmer confirms it.
  */
 export function HelpFab() {
   const { t } = useLanguage();
@@ -43,10 +41,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     ...shadow.fab,
-    // shadow.fab's elevation (4) is a *depth* cue, and on Android it doubles as the stacking
-    // order — a raised card further down the tree can end up painted over the FAB even though
-    // the FAB comes later in the JSX. Pin both FABs above anything a screen renders so "visible
-    // on every screen" holds however a screen is built.
+    // On Android elevation doubles as stacking order, so a raised card can paint over the
+    // FAB even though the FAB comes later in the JSX. Pin both above whatever a screen draws.
     elevation: 8,
     zIndex: 10,
   },

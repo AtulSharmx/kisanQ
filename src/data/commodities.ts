@@ -1,22 +1,12 @@
 /**
- * The commodity list the whole app picks from, as a *runtime* table rather than a compile-time
- * constant: an admin can add a new commodity from Admin Settings and it immediately becomes
- * selectable in the farmer's crop picker, assignable a per-mandi capacity, gradeable, priceable
- * and bookable — with no code change anywhere.
+ * The commodity list every picker in the app reads, merged from two sources:
+ *   1. the ten bundled MSP crops in ./crops.ts, with hand-written labels in all 12 languages,
+ *      so a fresh clone with no seed still has a working picker;
+ *   2. commodities/{id} in Firestore, which overrides a bundled entry with the same key rather
+ *      than being listed twice — that's how an admin changes a unit or deactivates a crop.
  *
- * Two sources, merged here:
- *   1. BUILT_IN_COMMODITIES — the ten MSP-covered non-perishables bundled in ./crops.ts, with
- *      hand-written labels in all 12 languages. These exist even on a completely empty Firestore
- *      (a fresh clone with no `npm run seed` still has a working picker), and they're what
- *      scripts/seed.ts writes into commodities/ so an admin can edit them like any other row.
- *   2. commodities/{id} — whatever is actually in Firestore right now, keyed by the same
- *      `key`/`cropType` string. A Firestore doc for a built-in key *overrides* the bundled entry
- *      (so an admin can switch sugarcane from quintals to tonnes, or deactivate a commodity the
- *      state has stopped procuring) rather than being listed twice.
- *
- * Nothing downstream branches on where a commodity came from — `key` is the only identity that
- * matters, and it's the same string used as `Crop.cropType`, `Booking.cropType`, and the second
- * half of a `{centreId}_{cropType}` capacity doc id.
+ * Nothing downstream cares which source a commodity came from. `key` is the only identity, and
+ * it's the same string used as Crop.cropType and in a capacity doc id.
  */
 import type { Commodity, CommodityUnit } from "../types/firestore";
 import type { Lang } from "../i18n/strings";
@@ -26,7 +16,7 @@ export interface CommodityOption {
   key: string;
   icon: string;
   unit: CommodityUnit;
-  /** English/canonical name — the fallback whenever this commodity has no label for a language. */
+  /** Canonical name, used whenever there's no label for the current language. */
   name: string;
   /** Full 12-language labels for the bundled commodities; partial or absent for admin-added ones. */
   labels: Partial<Record<Lang, string>>;
@@ -34,10 +24,8 @@ export interface CommodityOption {
 }
 
 /**
- * Every bundled commodity is priced per quintal — that's the unit MSP is quoted in for all ten.
- * Sugarcane is the one real-world exception (state advised price is per tonne), but flipping it
- * here would contradict the per-quintal numbers the rest of the demo data uses, so it's left to
- * an admin to change on the commodity row if they want it.
+ * All ten are per quintal, the unit MSP is quoted in. Sugarcane is really quoted per tonne, but
+ * changing it here would contradict the rest of the demo data — an admin can flip it on the row.
  */
 export const BUILT_IN_COMMODITIES: CommodityOption[] = CROPS.map((c) => ({
   key: c.key,
@@ -62,8 +50,8 @@ export function mergeCommodities(
       icon: row.icon || builtIn?.icon || "🌾",
       unit: row.unit,
       name: row.name,
-      // A Firestore row that carries no labels of its own keeps the bundled translations rather
-      // than dropping every language back to the typed English name.
+      // Keep the bundled translations if the row has none, rather than dropping every language
+      // back to the typed English name.
       labels: row.labels && Object.keys(row.labels).length > 0 ? row.labels : builtIn?.labels ?? {},
       active: row.active,
     });
@@ -75,11 +63,7 @@ export function commodityLabel(commodity: CommodityOption, lang: Lang): string {
   return commodity.labels[lang] ?? commodity.name;
 }
 
-/**
- * Label for a commodity key when the full option may not be loaded (or may have been deleted) —
- * falls back to the raw key rather than rendering an empty string, so an admin looking at an
- * orphaned capacity row can still tell which commodity it belongs to.
- */
+/** Falls back to the raw key, so an orphaned capacity row is still identifiable. */
 export function commodityLabelFor(
   key: string,
   commodities: CommodityOption[],

@@ -13,24 +13,19 @@ interface Props extends Omit<PressableProps, "style"> {
 }
 
 /**
- * Pressable with a quick scale-down/spring-back layered on top of whatever pressed-state style
- * is passed in (e.g. the app-wide `pressed && styles.pressed` opacity dip) — gives every tap a
- * tactile "push" instead of an instant opacity flip. Used by the shared tap targets
- * (PrimaryButton, IconTile, HomeFab, HelpFab) that most of the app's navigation goes through;
- * wrap this instead of a bare Pressable anywhere else a tap should feel the same way.
+ * Pressable with a scale-down and spring-back on tap, layered over whatever pressed style the
+ * caller passes. Used by the shared tap targets so every tap in the app feels the same.
  *
- * Deliberately a single Animated-wrapped Pressable rather than Pressable-plus-inner-Animated.View
- * — a wrapper View would break any caller (IconTile's `flexBasis: "47%"` 2-column grid, for
- * one) that relies on its own root element being the actual flex item their parent lays out.
- * Pressable's own per-state `style` callback can't take an Animated.Value directly, so the
- * `pressed` state used to resolve it is tracked here via onPressIn/onPressOut instead of
- * Pressable's internal one, then merged with the animated transform into a single style array.
+ * One Animated-wrapped Pressable rather than a Pressable around an Animated.View: a wrapper
+ * would break callers whose parent lays out this component's root as a flex item, like
+ * IconTile's two-column grid. Pressable's style callback can't take an Animated.Value, so
+ * `pressed` is tracked here instead of using Pressable's own.
  *
- * `hitSlop` is not cosmetic: touch hit-testing runs against the *transformed* box, so the moment
- * press-in shrinks the view to `scaleTo` the tappable area shrinks with it, and a finger resting
- * near an edge ends up outside it on release — the press is cancelled and onPress never fires.
- * The symptom is a wide button (the OTP screen's Continue) that only responds dead-centre. The
- * slop restores the lost band; it must be at least half the widest caller's width × (1 - scaleTo).
+ * `hitSlop` is load-bearing, not cosmetic. Hit-testing runs against the transformed box, so
+ * shrinking on press-in shrinks the tappable area with it and a finger near the edge falls
+ * outside on release — the press cancels and onPress never fires. The symptom was a wide button
+ * that only worked dead-centre. Needs to be at least half the widest caller's width x
+ * (1 - scaleTo).
  */
 export function AnimatedPressable({
   style,

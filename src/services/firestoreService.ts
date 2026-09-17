@@ -1,7 +1,6 @@
 /**
- * Firestore access for the Farmer App registration -> token flow, the Operator
- * scan/check-in + live-queue flow, and the Farmer App's real-time Live Queue / Procurement
- * Status screens. Collections/fields follow docs/KisanQ_Master_Technical_Spec.md section 3.
+ * All Firestore reads and writes for the app. Collections and fields follow
+ * docs/KisanQ_Master_Technical_Spec.md section 3.
  */
 import {
   addDoc,
@@ -36,25 +35,21 @@ import type {
   Slot,
 } from "../types/firestore";
 
-/** Average processing time per farmer, for wait estimates — see Missing Details Polish sec. 6. */
+/** Average processing time per farmer, for wait estimates (Missing Details Polish sec. 6). */
 export const AVERAGE_PROCESSING_MINUTES = 8;
 
 /**
- * Express (Tatkal-style) priority booking — a fixed, transparent, officially-priced, CAPPED
- * quota, not a live auction. Modelled on IRCTC/Passport Seva Tatkal: a small fixed number of
- * slots at a fixed (escalating-per-slot) price, and once they're gone nobody can buy their way
- * in no matter how much they'd pay — the cap is what stops it from turning into "everyone just
- * pays a bit more than the last person," which is the real fairness risk with an open-ended
- * pay-to-skip model. Deliberately small numbers: this is a demonstration of the *mechanism*,
- * not a revenue feature, and the price is a symbolic official fee, not a market price.
+ * Express priority booking: a capped quota at a fixed published price, never a live auction.
+ * The cap is the point — without it, "pay a bit more than the last person" just recreates the
+ * queue-jumping the app exists to stop.
  */
 export const EXPRESS_QUOTA_PER_DAY = 2;
 export const EXPRESS_PRICES = [20, 40]; // ₹, one entry per rank (1st slot cheaper than 2nd)
 
-/** Sort key for combined queue ordering: all Express entries before all regular entries,
- * ordered by arrival (position) within each group. Used everywhere "who's ahead of whom" is
- * computed, instead of comparing raw `position` — Express deliberately does not touch or
- * renumber anyone else's position, it only changes how the existing positions are compared. */
+/**
+ * Express entries first, then by arrival. Use this everywhere instead of comparing raw
+ * `position` — Express never renumbers anyone, it only changes how positions compare.
+ */
 export function queueSortKey(e: { isExpress?: boolean; position: number }): [number, number] {
   return [e.isExpress ? 0 : 1, e.position];
 }
@@ -63,9 +58,7 @@ function compareQueueSortKey(a: [number, number], b: [number, number]): number {
   return a[0] - b[0] || a[1] - b[1];
 }
 
-/** Comparator for Array.sort() — Express entries first, then by position — used by the
- * Operator's Live Queue Management screen so its display order matches what farmers actually
- * see reflected in isAheadInQueue()/queueSortKey() below. */
+/** Array.sort() comparator, so the operator's queue order matches what farmers see. */
 export function compareQueueEntries(
   a: { isExpress?: boolean; position: number },
   b: { isExpress?: boolean; position: number }
@@ -90,10 +83,7 @@ export interface RegisterFarmerInput {
   referenceToken: string;
 }
 
-/**
- * Creates farmers/{farmerId} + identityVerification/{farmerId}. `farmerId` must be the
- * caller's own auth.currentUser.uid — firestore.rules enforce this on write.
- */
+/** `farmerId` must be the caller's own auth uid — firestore.rules enforce that on write. */
 export async function registerFarmer(input: RegisterFarmerInput): Promise<string> {
   const farmerRef = doc(db, COLLECTIONS.farmers, input.farmerId);
   const farmer: Farmer = {
@@ -162,14 +152,9 @@ export interface CommodityWithId extends Commodity {
 }
 
 /**
- * Live commodity table. Everything that lets a farmer pick a commodity, an admin assign one a
- * capacity, or an operator price one reads through this (via useCommodities()), so an admin
- * adding a row here shows up across the app within the same second — no rebuild, no deploy.
- *
- * Deliberately unfiltered rather than `where("active","==",true)`: the Admin Settings screen
- * needs to see deactivated commodities in order to reactivate them, and callers that only want
- * the sellable ones filter on `active` themselves. At this collection's size (tens of rows, not
- * thousands) that's cheaper than maintaining two listeners.
+ * Live commodity table, read through useCommodities() by every picker in the app.
+ * Unfiltered on purpose: Admin Settings needs to see inactive rows to reactivate them, so
+ * callers that only want sellable ones filter on `active` themselves.
  */
 export function listenCommodities(
   onChange: (rows: CommodityWithId[]) => void
@@ -180,11 +165,9 @@ export function listenCommodities(
 }
 
 /**
- * Admin-only: adds (or edits) one commodity. The doc id is the commodity *key* — the same string
- * that becomes `Crop.cropType`/`Booking.cropType` and the second half of a capacity doc id — so
- * it's normalised to a lowercase, no-spaces slug here rather than being whatever the admin
- * typed. `setDoc` with merge:false is intentional: re-adding an existing key is how an admin
- * renames a commodity or changes its unit, which is a legitimate action, not a collision.
+ * Admin-only. The doc id is the commodity key, so it is normalised to a slug rather than
+ * whatever was typed. merge:false is intentional — re-adding an existing key is how an admin
+ * renames a commodity, not a collision.
  */
 export async function upsertCommodity(input: {
   key: string;
@@ -205,16 +188,12 @@ export async function upsertCommodity(input: {
   return key;
 }
 
-/** Admin-only: hides a commodity from the pickers without deleting the capacity/booking history
- *  that already references its key — deleting the row outright would orphan those. */
+/** Hides a commodity from the pickers. Deleting the row would orphan bookings using its key. */
 export async function setCommodityActive(key: string, active: boolean): Promise<void> {
   await setDoc(doc(db, COLLECTIONS.commodities, key), { active }, { merge: true });
 }
 
-/**
- * "Kala Chana" -> "kala_chana". Firestore doc ids may not contain "/" and our capacity doc ids
- * join on "_", so a key containing either would silently produce an unparseable id later.
- */
+/** "Kala Chana" -> "kala_chana". Doc ids can't hold "/", and capacity ids join on "_". */
 export function commodityKeyFromName(name: string): string {
   return name
     .trim()
@@ -254,9 +233,8 @@ export async function listActiveCentres(): Promise<CentreWithId[]> {
 }
 
 /**
- * Rough "how backed up is this centre right now" signal for the pre-booking Centre Selection
- * list. The exact live-queue-position formula (Missing Details Polish sec. 6) only applies
- * once a farmer has checked in; this is an estimate from farmers currently waiting/processing.
+ * Rough "how busy is this centre" estimate for the Centre Selection list. The exact wait
+ * formula only applies once a farmer has actually checked in.
  */
 export async function getCentreEstimatedWaitMinutes(centreId: string): Promise<number> {
   const q = query(
@@ -272,8 +250,7 @@ export interface SlotWithId extends Slot {
   id: string;
 }
 
-/** ISO date strings for today/tomorrow/day-after — advance booking is capped at 3 days out
- * since the daily capacity model (and the demo seed data) only plans that far ahead. */
+/** Today/tomorrow/day-after. Advance booking is capped at 3 days, same as the seed data. */
 export function advanceBookingDates(): string[] {
   return [0, 1, 2].map((offset) => {
     const d = new Date();
@@ -324,16 +301,11 @@ export interface CreateBookingInput {
   centreId: string;
   slotId: string;
   cropId: string;
-  /** Needed to look up this (centre, crop) pair's daily buying capacity — the caller already
-   * has this loaded (it's the crop the farmer picked earlier in the flow), so no extra
-   * transaction read is needed just to get it. */
+  /** Saves a read: the caller already has it from the crop the farmer picked. */
   cropType: string;
-  /** How much the farmer intends to bring, so the capacity gate can reject a booking that would
-   * *overshoot* the commodity's remaining capacity rather than only one that arrives after it
-   * already hit zero. Omitted = fall back to the zero-check alone. */
+  /** Lets the capacity gate reject a booking that would overshoot, not just one that arrives
+   *  after capacity already hit zero. Omitted = zero-check only. */
   expectedQuantity?: number;
-  /** Opt into an Express (Tatkal-style) slot, if one of the EXPRESS_QUOTA_PER_DAY is still
-   * available for this slot's date — see getExpressAvailability(). */
   wantsExpress?: boolean;
 }
 
@@ -345,14 +317,11 @@ export interface CreateBookingResult {
 }
 
 /**
- * Atomically: bumps the slot's bookedCount, allocates the next daily sequential token number
- * for the centre (format `[Centre code]-[4-digit sequential]`, resets daily — Missing Details
- * Polish sec. 4), optionally claims one of the day's capped Express slots, and creates the
- * bookings/{id} doc with status "booked".
+ * One transaction: bump bookedCount, allocate the centre's next daily token, optionally claim
+ * an Express slot, write the booking.
  *
- * The token/Express counters are keyed by the *slot's own* date, not the date this function
- * happens to run on — advance booking (booking a future day's slot) means those can differ, and
- * getting this wrong would silently mix today's token sequence with a future day's.
+ * The counters are keyed by the *slot's* date, not today's — with advance booking those differ,
+ * and mixing them would corrupt a future day's token sequence.
  */
 export async function createBooking(
   input: CreateBookingInput
@@ -381,50 +350,32 @@ export async function createBooking(
     const centre = centreSnap.data() as Centre;
     const slot = slotSnap.data() as Slot;
 
-    // Daily buying-capacity gate — opt-in (only (centre, crop) pairs an admin has configured a
-    // capacity doc for are gated at all) and only for *today's* date (this doc has no separate
-    // tracking for future days, so advance bookings for tomorrow/day-after are never blocked by
-    // it). Only gates *new* bookings; an already-confirmed booking that's mid-queue when
-    // capacity runs out is deliberately left alone — see the CENTRE_CAPACITY_FULL handling in
-    // SlotBookingScreen.
-    //
-    // The gate is strictly per-commodity: it reads only this (centre, commodity) pair's own
-    // document, so wheat running out has no effect whatsoever on a paddy booking at the same
-    // centre on the same day. There is no shared pool.
+    // Capacity gate. Opt-in (no capacity doc = not gated), today only (there is no per-day
+    // tracking for future dates), and strictly per-commodity — wheat running out never blocks
+    // a paddy booking. Gates new bookings only; a farmer already in the queue is left alone.
     if (capacitySnap.exists()) {
       const capacity = capacitySnap.data() as CentreCropCapacity;
       if (slot.date === today) {
         const remaining = capacity.remainingCapacityQuintals;
-        if (remaining <= 0) {
-          // Stable error code, same pattern as SLOT_FULL/EXPRESS_SOLD_OUT below — the screen maps
-          // this to a translated message rather than showing raw English.
-          throw new Error("CENTRE_CAPACITY_FULL");
-        }
+        // These are error codes, not user-facing text — the screen translates them. The two
+        // are separate so a farmer with too big a load is told how much is left and can book a
+        // smaller quantity, instead of just being told "closed".
+        if (remaining <= 0) throw new Error("CENTRE_CAPACITY_FULL");
         if (input.expectedQuantity != null && input.expectedQuantity > remaining) {
-          // Distinct from CENTRE_CAPACITY_FULL: there *is* capacity left, just not enough for
-          // this load. Worth its own code so the farmer can be told how much is actually left
-          // and book a smaller quantity or another centre, instead of being told "closed."
           throw new Error(`CENTRE_CAPACITY_INSUFFICIENT:${remaining}`);
         }
       }
     }
 
-    if (slot.bookedCount >= slot.capacity) {
-      // "SLOT_FULL" is a stable error code, not user-facing text — SlotBookingScreen maps it to
-      // the translated slotJustFilled string rather than displaying this message directly, so
-      // this race-condition error (two farmers booking the last slot at once) doesn't show up
-      // in English inside an otherwise Hindi-default screen.
-      throw new Error("SLOT_FULL");
-    }
+    // Race: two farmers taking the last slot at once. SlotBookingScreen translates the code.
+    if (slot.bookedCount >= slot.capacity) throw new Error("SLOT_FULL");
 
     const counterRef = doc(db, COLLECTIONS.tokenCounters, `${input.centreId}_${slot.date}`);
     const counterSnap = await tx.get(counterRef);
     const nextSeq = (counterSnap.exists() ? (counterSnap.data().count as number) : 0) + 1;
     const token = `${centre.code}-${String(nextSeq).padStart(4, "0")}`;
 
-    // Express eligibility is read here (alongside the other reads) but only *written* below,
-    // once every read this transaction needs has happened — Firestore transactions require all
-    // reads before any writes.
+    // Read here, written below: Firestore wants every read before any write.
     let expressCounterRef: ReturnType<typeof doc> | undefined;
     let expressCount = 0;
     if (input.wantsExpress) {
@@ -435,11 +386,7 @@ export async function createBooking(
       );
       const expressSnap = await tx.get(expressCounterRef);
       expressCount = expressSnap.exists() ? (expressSnap.data().count as number) : 0;
-      if (expressCount >= EXPRESS_QUOTA_PER_DAY) {
-        // Stable error code, same pattern as SLOT_FULL — the screen maps this to a translated
-        // "sold out" message rather than showing raw English.
-        throw new Error("EXPRESS_SOLD_OUT");
-      }
+      if (expressCount >= EXPRESS_QUOTA_PER_DAY) throw new Error("EXPRESS_SOLD_OUT");
     }
 
     tx.set(counterRef, { count: nextSeq });
@@ -458,9 +405,7 @@ export async function createBooking(
       centreId: input.centreId,
       slotId: input.slotId,
       cropId: input.cropId,
-      // Denormalized from the crop doc so every later consumer (quality check's capacity
-      // decrement, the operator's queue rows) can tell which commodity's capacity this booking
-      // draws down without a second read — this is the spec's `commodity_id` on the booking.
+      // Denormalized so quality check can find the right capacity doc without a second read.
       cropType: input.cropType,
       tokenNumber: token,
       status: "booked",
@@ -484,12 +429,9 @@ export interface BookingWithId extends Booking {
 }
 
 /**
- * Farmer-initiated cancel — UI/UX design principle 9 ("confirm before anything irreversible");
- * the confirm step itself lives in the screen via ConfirmDialog. Only legal while the booking is
- * still "booked" (not yet checked in) — once an operator has scanned the farmer in, cancelling
- * their spot in a physical queue they're already standing in doesn't make sense, so this
- * intentionally does not handle that case (matches the equivalent restriction firestore.rules
- * enforces server-side, not just this check).
+ * Only legal before check-in: once the farmer is physically standing in the queue, cancelling
+ * their spot makes no sense. firestore.rules enforce the same restriction server-side.
+ * The confirm prompt lives in the screen (ConfirmDialog).
  */
 export async function cancelBooking(bookingId: string): Promise<void> {
   const bookingRef = doc(db, COLLECTIONS.bookings, bookingId);
@@ -506,11 +448,8 @@ export async function cancelBooking(bookingId: string): Promise<void> {
     const slotSnap = await tx.get(slotRef);
     if (slotSnap.exists()) {
       const slot = slotSnap.data() as Slot;
-      // Frees the slot back up for another farmer to book — mirrors createBooking()'s +1 with
-      // the opposite sign, same reasoning as the firestore.rules comment on slots.bookedCount.
-      // Not clamped to 0: a booking existing at all means createBooking() already incremented
-      // this same slot's bookedCount at least once, so it can never be 0 here — and the rule
-      // requires this write to be exactly resource.data.bookedCount - 1, not a clamped value.
+      // Mirrors createBooking()'s +1. Not clamped at 0 — the booking existing proves the
+      // count was incremented, and the security rule wants exactly bookedCount - 1.
       tx.update(slotRef, { bookedCount: slot.bookedCount - 1 });
     }
 
@@ -539,14 +478,11 @@ export async function getActiveBookingForFarmer(
 // ---------------------------------------------------------------------------
 
 /**
- * Looks up a booking by its token (QR scan or manual entry), only if it hasn't been checked in
- * yet. Scoped to the operator's own centre AND "booked" status — Firestore rules can only
- * secure a *query* (as opposed to a single-doc get) when every field the rule checks is also
- * an equality filter in the query itself, so `centreId` has to be here even though
- * `isOperatorForCentre` would also pass a per-document check. Doesn't scope by date — tokens
- * reset daily per centre, so a stale token from a previous day that was never checked in could
- * theoretically still match; low-risk for a prototype that gets reseeded per demo, but a real
- * deployment would also filter by the booking's slot date.
+ * Finds a booking by token (QR or typed), only if not yet checked in. The `centreId` filter is
+ * required, not just defensive: Firestore can only secure a query when every field the rule
+ * checks is also an equality filter in the query.
+ * Known limitation: no date filter, so a stale token from a previous day could still match.
+ * Fine for a demo that gets reseeded; a real deployment would filter on the slot's date.
  */
 export async function findCheckInCandidate(
   tokenNumber: string,
@@ -571,10 +507,8 @@ export interface CheckInResult {
 }
 
 /**
- * Atomically: allocates the next daily queue position for the centre, creates the queue/{id}
- * doc (status "waiting"), and moves the booking to status "arrived" — UI/UX spec Operator
- * screen 2. This is the moment that starts populating the farmer's Live Queue (wired to
- * real-time listeners in build order step 4).
+ * Allocates the centre's next queue position, creates the queue doc and marks the booking
+ * "arrived". This is the write that makes the farmer's Live Queue screen light up.
  */
 export async function checkInBooking(input: {
   bookingId: string;
@@ -621,11 +555,7 @@ export interface QueueEntryWithId extends QueueEntry {
   id: string;
 }
 
-/**
- * Real-time listener for a centre's queue — UI/UX spec Operator screen 3 ("this screen powers
- * the farmer's Live Queue screen — most important operator screen"). Returns an unsubscribe
- * function; callers own the listener's lifecycle.
- */
+/** Live queue for one centre. Caller owns the returned unsubscribe. */
 export function listenQueueForCentre(
   centreId: string,
   onChange: (entries: QueueEntryWithId[]) => void,
@@ -644,10 +574,9 @@ export function listenQueueForCentre(
 }
 
 /**
- * "Call Next" — Operator screen 3: moves a waiting queue entry (and its booking) to
- * "processing", and notifies the farmer with the exact copy from Missing Details Polish sec. 1.
- * The doc's "[X]" counter placeholder is fixed to "1" here since the data model doesn't track
- * physical counter numbers — a real deployment would let an operator pick/enter their counter.
+ * "Call Next": moves the entry and its booking to "processing" and notifies the farmer.
+ * The spec's "[X]" counter placeholder is hardcoded to 1 — the data model has no counter
+ * numbers, so a real deployment would let the operator pick theirs.
  */
 export async function callNextInQueue(queueId: string): Promise<void> {
   const queueRef = doc(db, COLLECTIONS.queue, queueId);
@@ -700,11 +629,7 @@ export interface ProcurementWithId extends Procurement {
   id: string;
 }
 
-/**
- * Real-time listener for the procurement doc tied to a booking (0 docs until the operator's
- * weighing screen creates one). At most one procurement doc per booking in practice, so this
- * reports the first match or null.
- */
+/** Null until the operator's weighing screen creates the doc. One per booking in practice. */
 export function listenProcurementForBooking(
   bookingId: string,
   onChange: (procurement: ProcurementWithId | null) => void,
@@ -730,11 +655,9 @@ export interface PaymentWithId extends Payment {
 }
 
 /**
- * Real-time listener for the payment doc tied to a procurement (0 docs today — nothing writes
- * to payments/ yet, since payment simulation isn't part of the build order steps done so far).
- * Used for the Procurement Status tracker's "Payment" tick, so it doesn't fall back to
- * approximating payment completion from booking.status (which now flips to "completed" the
- * moment quality-check finishes, whether or not any payment happened).
+ * Backs the Procurement Status tracker's "Payment" tick. Reads payments/ directly rather than
+ * inferring from booking.status, which flips to "completed" at quality check whether the
+ * produce was accepted or rejected — which is not the same thing as paid.
  */
 export function listenPaymentForProcurement(
   procurementId: string,
@@ -758,11 +681,7 @@ export interface NotificationWithId extends AppNotification {
   id: string;
 }
 
-/**
- * Real-time listener for a farmer's notifications, newest first — same
- * query+onSnapshot shape as listenQueueForCentre(). Matches the farmerId+createdAt(desc)
- * composite index already in firestore.indexes.json.
- */
+/** Newest first. Needs the farmerId + createdAt(desc) index in firestore.indexes.json. */
 export function listenNotifications(
   farmerId: string,
   onChange: (notifications: NotificationWithId[]) => void,
@@ -789,10 +708,8 @@ export interface RecordWeighingResult {
 }
 
 /**
- * Weighing screen (UI/UX spec Operator screen 4) — creates the procurement doc for a booking
- * (idempotent: if the operator already weighed this booking once, e.g. after navigating back,
- * the same doc is reused rather than duplicated) and notifies the farmer with the exact copy
- * from Missing Details Polish sec. 1.
+ * Creates the booking's procurement doc and notifies the farmer. Idempotent — an operator who
+ * navigates back and re-weighs reuses the same doc instead of creating a second one.
  */
 export async function recordWeighing(input: {
   bookingId: string;
@@ -844,62 +761,24 @@ export interface QualityCheckInput {
   farmerId: string;
   moisturePct: number;
   grade: string;
-  /**
-   * ₹ per unit the operator is paying for this lot. Pre-filled on the screen from the centre's
-   * configured price for the chosen grade, but always the operator's own typed number by the
-   * time it reaches here — the rate is never inferred from the grade letter.
-   */
+  /** Pre-filled from the centre's grade price, but always the operator's own typed number. */
   pricePerUnit: number;
   decision: "accept" | "reject";
   rejectionReason?: string;
-  /** Needed to decrement this (centre, crop) pair's remainingCapacityQuintals on Accept —
-   * already known to the screen from the earlier Weighing step, so no extra document read is
-   * needed to get it. */
+  /** Decrements remaining capacity on Accept. The screen already has it from Weighing. */
   actualWeight: number;
 }
 
 /**
- * Quality Check screen (UI/UX spec Operator screen 5) — Accept/Reject (the confirmation prompt
- * the spec calls for happens in the UI before this is called). On reject, procurementStatus is
- * set to "rejected" and the farmer keeps their produce with no payment obligation, per Missing
- * Details Polish sec. 8. Either outcome closes out the booking/queue entry — the farmer's turn
- * at the centre is over regardless of the quality outcome.
- *
- * On Accept only, this also decrements the booking's (centre, crop) pair's
- * remainingCapacityQuintals by the actual weighed quantity, in the same transaction — the
- * Daily Buying Capacity feature's core write. Only decrements if a centreCropCapacity doc
- * exists for that pair (opt-in — see the type comment in types/firestore.ts); most bookings
- * simply won't have one configured, and that's not an error, just "not capacity-gated." A
- * reject doesn't touch capacity at all (nothing was bought). Not clamped at 0: the last farmer
- * of the day can legitimately push the number slightly negative (their produce was already
- * weighed and is being bought regardless) — the feature's actual constraint is on *new*
- * bookings (see createBooking()'s CENTRE_CAPACITY_FULL check), not on a farmer already this far
- * into the process.
- *
- * On Accept this also records the agreed rate (`pricePerUnit`) and raises the *simulated*
- * payment document for `actualWeight x pricePerUnit` — CLAUDE.md rule 6: no real money moves,
- * ever, and no payment gateway is contacted. It's created with status "processing" rather than
- * "completed" because that is the honest state: in real MSP procurement the money reaches the
- * farmer's account days later, and claiming otherwise on the Procurement Status tracker would
- * undercut the transparency the tracker exists for.
- */
-/**
- * How many days after acceptance the farmer is told to expect the money.
- *
- * Not a spec number. MSP procurement is supposed to settle within 72 hours of the purchase, so
- * three days is the honest promise to print — and printing a date at all is the point: "payment
- * processing" with no date is exactly the open-ended limbo farmers are made to live in today,
- * where nobody will say when. A single named constant so the promise is changed in one place if
- * a state's actual settlement window differs.
+ * Days until the farmer is told to expect payment. Not a spec number — MSP procurement is
+ * meant to settle within 72 hours, and printing a date at all is the point: "processing" with
+ * no date is the open-ended limbo the tracker exists to replace.
  */
 export const PAYMENT_SETTLEMENT_DAYS = 3;
 
 /**
- * `from` plus `days`, as a "YYYY-MM-DD" calendar date in local time.
- *
- * Deliberately not toISOString().slice(0, 10) — that converts to UTC first, which in IST (UTC+5:30)
- * silently reports the *previous* day for anything before 05:30, so a payment accepted at 9am
- * would promise a date one day early.
+ * `from` + `days` as "YYYY-MM-DD" in local time. Not toISOString() — that goes through UTC,
+ * which in IST reports yesterday for anything before 05:30.
  */
 export function expectedPaymentDate(from: Date, days: number = PAYMENT_SETTLEMENT_DAYS): string {
   const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() + days);
@@ -909,12 +788,9 @@ export function expectedPaymentDate(from: Date, days: number = PAYMENT_SETTLEMEN
 }
 
 /**
- * A "YYYY-MM-DD" date as "DD-MM-YYYY" for display.
- *
- * Deliberately numeric rather than a month name: the app ships in 12 languages and a localized
- * month table would be twelve more sets of strings to keep in step, while DD-MM-YYYY is the form
- * already printed on every Indian form a farmer has ever filled in. Returns the input unchanged
- * if it isn't a plain date, so an older payment doc without the field can't blank the line.
+ * "YYYY-MM-DD" -> "DD-MM-YYYY". Numeric rather than a month name: that would be 12 more
+ * translation tables, and this is the form on every Indian form already. Unparseable input is
+ * returned unchanged so an old payment doc can't blank the line.
  */
 export function formatPaymentDate(isoDate: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
@@ -932,23 +808,20 @@ export async function submitQualityCheck(input: QualityCheckInput): Promise<void
   const paymentNotificationRef = doc(collection(db, COLLECTIONS.notifications));
   const accepted = input.decision === "accept";
   const payableAmount = Math.round(input.actualWeight * input.pricePerUnit);
-  // Computed on the device rather than from serverTimestamp() because the farmer is promised a
-  // calendar date, and a date has to exist before the write so the notification can quote the
-  // same one the payment doc carries.
+  // Device-side, not serverTimestamp(): the notification has to quote the same date the
+  // payment doc carries, so it must exist before the write.
   const dueDate = expectedPaymentDate(new Date());
 
   await runTransaction(db, async (tx) => {
-    // All reads (across every branch) must happen before any writes below, per Firestore
-    // transaction rules — so the booking/crop/capacity lookup, gated on `accepted`, has to run
-    // first.
+    // Firestore wants all reads before any write, so the capacity lookup runs first.
     let capacityRef: ReturnType<typeof doc> | undefined;
     let capacity: CentreCropCapacity | undefined;
     if (accepted) {
       const bookingSnap = await tx.get(bookingRef);
       if (!bookingSnap.exists()) throw new Error("Booking not found");
       const booking = bookingSnap.data() as Booking;
-      // Bookings created since the commodity work carry their own cropType; older ones don't, so
-      // fall back to the crop doc rather than skipping the capacity decrement for them.
+      // Older bookings predate the denormalized cropType — read the crop doc rather than
+      // silently skipping their capacity decrement.
       let cropType = booking.cropType;
       if (!cropType) {
         const cropSnap = await tx.get(doc(db, COLLECTIONS.crops, booking.cropId));
@@ -968,7 +841,7 @@ export async function submitQualityCheck(input: QualityCheckInput): Promise<void
     tx.update(procurementRef, {
       moisturePct: input.moisturePct,
       grade: input.grade,
-      // Null on a rejection: nothing was bought, so there is no rate to record.
+      // Null on reject: nothing was bought, so there is no rate.
       pricePerUnit: accepted ? input.pricePerUnit : null,
       qualityStatus: accepted ? "accepted" : "rejected",
       procurementStatus: accepted ? "completed" : "rejected",
@@ -1009,8 +882,7 @@ export async function submitQualityCheck(input: QualityCheckInput): Promise<void
     const notification: AppNotification = {
       farmerId: input.farmerId,
       type: "quality_checked",
-      // Missing Details Polish sec. 1 gives the exact accept copy; a distinct reject copy
-      // isn't specified there, so this is a reasonable extension, not a verbatim doc quote.
+      // Accept copy is verbatim from the docs; the reject wording isn't specified there.
       message: accepted
         ? `गुणवत्ता जांच पूरी — ग्रेड: ${input.grade}।`
         : `गुणवत्ता जांच पूरी — अस्वीकार किया गया${input.rejectionReason ? `: ${input.rejectionReason}` : "।"}`,
@@ -1022,12 +894,7 @@ export async function submitQualityCheck(input: QualityCheckInput): Promise<void
   });
 }
 
-/**
- * Reads one (centre, crop) pair's capacity doc — null means that pair isn't capacity-gated at
- * all (no admin has configured one). Used by SlotBookingScreen, which only needs its own
- * centre+crop, not a live listener (the screen already refreshes this after a failed booking
- * attempt, same as it does for slots/express availability).
- */
+/** Null means the pair isn't capacity-gated. One-shot: SlotBookingScreen refreshes it itself. */
 export async function getCentreCropCapacity(
   centreId: string,
   cropType: string
@@ -1037,15 +904,8 @@ export async function getCentreCropCapacity(
 }
 
 /**
- * Admin-only: configures a (centre, crop) pair's daily buying capacity for the first time (or
- * deliberately resets it — see below). This is the only way a centreCropCapacity doc comes into
- * existence; nothing is capacity-gated until an admin does this. Uses `setDoc` rather than a
- * transaction since it's a plain admin-authored write, not a counter mutated concurrently by
- * other writers the way remainingCapacityQuintals is.
- *
- * Deliberately allowed to overwrite an existing doc for the same pair: re-"adding" a crop that
- * already has a capacity entry is a legitimate manual action too (an admin resetting the day's
- * number back to full), not a mistake to guard against.
+ * The only way a capacity doc gets created — nothing is gated until an admin calls this.
+ * Overwriting an existing pair is allowed on purpose: that's how an admin resets the day.
  */
 export async function addCentreCropCapacity(
   centreId: string,
@@ -1062,12 +922,8 @@ export async function addCentreCropCapacity(
 }
 
 /**
- * Admin-only manual increase to a (centre, crop) pair's remainingCapacityQuintals — e.g. head
- * office authorizing more purchase for the day. Deliberately kept separate from the
- * Accept-triggered decrement in submitQualityCheck(): per the feature spec, this stays a
- * manual, deliberate action, never automatic. No broadcast notification on increase (see
- * SlotBookingScreen/CentreSelectionScreen instead) — the live listeners below are enough for a
- * farmer checking the Centre Selection screen to see the new number.
+ * Manual top-up, e.g. head office authorising more purchase for the day. Kept separate from
+ * the automatic decrement in submitQualityCheck() — raising capacity is always a decision.
  */
 export async function increaseCentreCropCapacity(
   centreId: string,
@@ -1086,16 +942,10 @@ export async function increaseCentreCropCapacity(
 }
 
 /**
- * Admin-only: sets what this centre pays per unit for each quality grade of one commodity.
- * Every price is typed in by the admin — nothing here derives a rate from the grade letter, by
- * design: the whole feature exists because "A" is worth a different number of rupees in
- * different mandis and different seasons, and a farmer comparing centres needs the real figure,
- * not a formula.
- *
- * Grades the admin left blank are dropped rather than written as 0 — an unpriced grade should
- * read as "no rate published" at quality check (operator types one free-hand), not as "this
- * grade is worth nothing." Merged into the existing capacity doc so a price update can never
- * clobber remainingCapacityQuintals, which other writers are concurrently decrementing.
+ * What this centre pays per grade. Every price is typed in — "A" is worth a different number
+ * of rupees in different mandis and seasons, so nothing here derives a rate from the letter.
+ * Blank grades are dropped, not stored as 0: unpriced means "no rate published", not "worth
+ * nothing". Merged so a price update can't clobber the capacity counter.
  */
 export async function setCentreCropGradePrices(
   centreId: string,
@@ -1117,10 +967,7 @@ export interface CentreCropCapacityWithId extends CentreCropCapacity {
   id: string;
 }
 
-/**
- * Live capacity rows for every (centre, crop) pair an admin has configured — the Admin
- * Drilldown's capacity section groups these by centre.
- */
+/** Every configured (centre, crop) pair; the Admin Drilldown groups them by centre. */
 export function listenCentreCropCapacities(
   onChange: (rows: CentreCropCapacityWithId[]) => void
 ): Unsubscribe {
@@ -1130,16 +977,10 @@ export function listenCentreCropCapacities(
 }
 
 /**
- * Live capacity row per centre, for one specific crop — the Centre Selection screen's farmer has
- * already picked their crop by the time they reach this screen, so this only needs to watch that
- * one crop across centres, same onSnapshot-on-a-collection pattern as
- * listenQueueForCentre()/listenAdminOverview() elsewhere in this file. A centre with no
- * document for this crop simply doesn't appear in the returned map — the screen treats that as
- * "not capacity-gated," not "zero."
- *
- * Returns the whole row rather than just the remaining number because the same document now also
- * carries `gradePrices`, and a farmer comparing centres wants both figures ("how much can they
- * still buy" and "what will they pay me") from the one listener.
+ * One crop across all centres — by this screen the farmer has already picked their crop.
+ * A centre missing from the map isn't capacity-gated, which is not the same as zero.
+ * Returns the whole row, not just the remaining number: a farmer comparing centres wants both
+ * "how much can they still buy" and "what will they pay me" from one listener.
  */
 export function listenCropCapacityAcrossCentres(
   cropType: string,
@@ -1160,16 +1001,11 @@ export function listenCropCapacityAcrossCentres(
 }
 
 // ---------------------------------------------------------------------------
-// Admin: overview + district->centre drill-down (Master Spec build order step 6)
-// Real-time via onSnapshot on each underlying collection, combined and recomputed on every
-// change — an admin watching this screen now sees a booking/check-in/completion land within
-// the same second it happens on the Operator side, instead of needing a manual page reload
-// (a stale-dashboard gap called out in review; the aggregation logic itself is unchanged from
-// the one-shot version this replaces). Still full, unfiltered collection reads — fine at demo
-// scale, not meant to scale to a real deployment's data volume. `totalBookings`/
-// `completedBookings` are all-time counts: a booking doc doesn't carry its own date (only its
-// linked slot does), so "today's bookings" would need an extra join per booking — a reasonable
-// simplification for a non-differentiator screen, not an oversight.
+// Admin: overview + district -> centre drill-down
+//
+// Full unfiltered collection reads, fine at demo scale and not meant to go further. Counts are
+// all-time, not today's: a booking carries no date of its own (only its slot does), so scoping
+// to today would mean a join per booking.
 // ---------------------------------------------------------------------------
 
 /** Centre is flagged "overloaded" above this booking-count-vs-dailyCapacity percentage. */
@@ -1185,12 +1021,9 @@ export interface AdminOverview {
 }
 
 /**
- * Real-time Admin Overview — combines four independent onSnapshot listeners (centres, farmers,
- * bookings, queue) and recomputes the aggregate on every change to any of them. Each listener
- * fires immediately with its current data on subscribe, so onChange typically gets called a few
- * times in quick succession as they each report in, converging on the correct numbers within a
- * fraction of a second — simpler than gating the first call on all four being ready, and no
- * worse than the one-shot version's own brief loading state.
+ * Four listeners, recomputed whenever any of them fires. Each fires once on subscribe, so
+ * onChange is called a few times in quick succession before the numbers settle — simpler than
+ * gating the first call on all four being ready, and not visible at this speed.
  */
 export function listenAdminOverview(
   onChange: (overview: AdminOverview) => void
@@ -1251,11 +1084,7 @@ export interface CentreBreakdown {
   overloaded: boolean;
 }
 
-/**
- * Real-time per-centre stats for the District -> Centre drill-down table (grouped by district
- * by the caller) — same combined-listener pattern as listenAdminOverview, over centres/
- * bookings/queue.
- */
+/** Per-centre stats for the drill-down table; the caller groups them by district. */
 export function listenAdminCentreBreakdown(
   onChange: (breakdown: CentreBreakdown[]) => void
 ): Unsubscribe {

@@ -1,26 +1,18 @@
 /**
- * Demo data reset — wipes everything a rehearsal run adds, without touching the fixed-ID demo
- * data scripts/seed.ts creates. Run this before every practice/demo pass so the Admin Dashboard
- * counters and Live Queue stay exactly as clean as they were right after `npm run seed`
- * (Audit finding: rehearsal traffic with auto-generated Firestore IDs had already pushed the
- * Admin Dashboard to "5 farmers, 11 bookings" against a seeded baseline of 4 farmers, with no
- * script anywhere to undo it).
+ * Clears everything a rehearsal run adds, leaving seed.ts's fixed-ID data alone. Run it before
+ * each practice pass, or the Admin Dashboard counters drift up with every test booking.
  *
- * Two kinds of collections here:
- *   1. Real-usage-only (nothing in seed.ts ever writes to these): notifications, procurement,
- *      payments, identityVerification, staffSessions, tokenCounters — every document in them is
- *      wiped unconditionally.
- *   2. Seed + real-usage mixed: farmers, crops, bookings, queue, staff, slots, centres —
- *      documents are only wiped if their ID isn't one of seed.ts's fixed IDs (mirrored below;
- *      keep this list in sync with scripts/seed.ts if that script's shape ever changes).
- * slots.bookedCount and queuePositionCounters.count are fixed-ID docs that seed.ts also mutates
- * in place (not just creates) — those are restored to their seeded values rather than deleted.
+ * Collections fall into two groups:
+ *   1. real-usage only (notifications, procurement, payments, identityVerification,
+ *      staffSessions, tokenCounters) — wiped completely;
+ *   2. mixed (farmers, crops, bookings, queue, staff, slots, centres) — a doc is wiped only if
+ *      its ID isn't one of seed.ts's fixed ones, mirrored below. Keep that list in sync with
+ *      seed.ts.
+ * slots.bookedCount and queuePositionCounters.count are seeded in place rather than created, so
+ * they're restored to their seeded values instead of deleted.
  *
- * Uses firebase-admin (bypasses Firestore security rules) with the same serviceAccountKey.json
- * as scripts/seed.ts — local/demo use only, never run against a production project.
- *
- * Usage: npm run reset   (then npm run seed if you want a fully clean slate, or just reset if
- * you never deleted the fixed seed docs and only want to drop rehearsal traffic)
+ * Uses firebase-admin, which bypasses the security rules. Local demo use only.
+ * Usage: npm run reset
  */
 import { initializeApp, cert } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
@@ -50,11 +42,8 @@ const today = new Date().toISOString().slice(0, 10);
 
 // --- Fixed IDs scripts/seed.ts creates, mirrored exactly so we never delete seed data. ---
 const CENTRE_IDS = ["centre-ksn", "centre-pnp", "centre-snp"];
-// Seeded per-crop daily buying capacity (Daily Buying Capacity feature) — mirrors
-// scripts/seed.ts's cropCapacityDefs exactly, so remainingCapacityQuintals can be restored to
-// "nothing bought yet today" the same way slots.bookedCount is restored below. An admin adding
-// capacity for some *other* crop during rehearsal (addCentreCropCapacity()) isn't a fixed seed
-// doc, so it gets wiped like any other real-usage document — see CROP_CAPACITY_IDS below.
+// Mirrors seed.ts's cropCapacityDefs, so remaining capacity can be restored to "nothing bought
+// yet". Capacity an admin added during rehearsal isn't a seed doc and gets wiped.
 const SEEDED_CROP_CAPACITY: Record<string, Record<string, number>> = {
   "centre-ksn": { wheat: 500, paddy: 300 },
   "centre-pnp": { wheat: 400, paddy: 250 },

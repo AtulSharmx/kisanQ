@@ -41,11 +41,10 @@ export function StepCentreScreen({ route, navigation }: Props) {
     setSaving(true);
     setError(null);
     try {
-      // Must derive from the same `aadhaar` value ProfileConfirmScreen used, not the farmer's
-      // uid — otherwise the profile the farmer confirmed on screen wouldn't match what actually
-      // gets saved here. The raw Aadhaar number is only ever passed through navigation params
-      // in memory (never written to Firestore — see CLAUDE.md rule 5 / identityVerification's
-      // referenceToken) and is dropped once this screen finishes.
+      // Must derive from the same aadhaar value ProfileConfirmScreen used, or the profile
+      // the farmer just confirmed won't match what gets saved. The raw number only ever
+      // lives in navigation params in memory and is dropped when this screen finishes — it
+      // is never written to Firestore.
       const profile = mockAadhaarLookup(aadhaar);
       const farmer = {
         name: profile.name,

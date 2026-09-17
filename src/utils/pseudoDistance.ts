@@ -1,10 +1,8 @@
 /**
- * The Master Spec's Centre Selection screen shows a distance per centre, but no screen in the
- * documented flow ever asks for or captures the farmer's GPS location — there's no location
- * permission step anywhere in the spec. Rather than silently adding an undocumented
- * location-permission screen, this derives a stable, plausible-looking distance per
- * (farmerId, centreId) pair so the ranked list still reads sensibly in a demo. Replace with a
- * real distance calculation once location capture is actually specified.
+ * Centre Selection shows a distance per centre, but nothing in the documented flow ever asks
+ * for the farmer's location. Rather than inventing a permission screen the spec doesn't have,
+ * this derives a stable plausible distance per (farmerId, centreId) so the ranked list reads
+ * sensibly in a demo. Replace once location capture is actually specified.
  */
 export function pseudoDistanceKm(farmerId: string, centreId: string): number {
   const seed = `${farmerId}:${centreId}`;

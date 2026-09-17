@@ -22,10 +22,8 @@ type Props = NativeStackScreenProps<RootStackParamList, "LiveQueue">;
 type Phase = "loading" | "empty" | "awaitingCheckin" | "live";
 
 /**
- * Live Queue — UI/UX spec screen 9, wired to real-time listeners (Master Spec build order
- * step 4). "People ahead of you" is computed live from the centre's whole queue (not just the
- * position value frozen at check-in time) so it visibly drops the moment an operator processes
- * someone ahead — this is the actual "real-time visibility" the Winning Strategy doc is about.
+ * "People ahead of you" is computed from the centre's whole queue, not the position frozen at
+ * check-in, so it visibly drops the moment an operator processes someone ahead.
  */
 export function LiveQueueScreen({ navigation }: Props) {
   const { t } = useLanguage();
@@ -70,10 +68,8 @@ export function LiveQueueScreen({ navigation }: Props) {
       const mine = entries.find((e) => e.bookingId === booking.id);
       if (!mine) return;
       setMyStatus(mine.status);
-      // Express entries (Tatkal-style, fixed price + capped quota — see firestoreService.ts)
-      // sort ahead of regular ones regardless of raw position; isAheadInQueue() is the single
-      // shared rule for that, also used by the Operator's Live Queue Management screen, so the
-      // two screens never disagree about who's actually next.
+      // Express sorts ahead regardless of raw position. isAheadInQueue() is the one shared
+      // rule, so this screen and the operator's never disagree about who is next.
       const ahead = entries.filter(
         (e) => e.status !== "completed" && isAheadInQueue(e, mine)
       ).length;

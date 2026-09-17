@@ -1,16 +1,14 @@
 /**
- * Demo seed data — docs/KisanQ_Missing_Details_Polish.md section 9.
+ * Demo seed data (Missing Details Polish section 9): three centres, slots for the next three
+ * days with a realistic mix of full and available, and a couple of bookings already in the
+ * queue so the Live Queue screen shows "2 people ahead of you" during a demo instead of being
+ * empty.
  *
- * Populates 2-3 centres, a handful of slots for today (some full, some available), and 1-2
- * "fake" bookings already sitting in the queue ahead of a live demo booking, so the Live Queue
- * screen shows a realistic "3 people ahead of you" during the demo instead of an empty queue.
- *
- * Uses firebase-admin (bypasses Firestore security rules) with a service account key — this
- * script is for local/demo seeding only, never run it against a production project.
+ * Uses firebase-admin, which bypasses the security rules. Local demo use only.
  *
  * Usage:
  *   1. Firebase Console -> Project Settings -> Service Accounts -> Generate new private key
- *   2. Save the downloaded JSON as serviceAccountKey.json in the repo root (git-ignored)
+ *   2. save it as serviceAccountKey.json in the repo root (git-ignored)
  *   3. npm run seed
  */
 import { initializeApp, cert } from "firebase-admin/app";
@@ -86,22 +84,16 @@ async function seed() {
   }
 
   console.log("Seeding per-crop daily buying capacity (wheat, paddy — CLAUDE.md's MSP scope)...");
-  // Daily Buying Capacity feature — opt-in per (centre, crop) pair (see the type comment on
-  // CentreCropCapacity in src/types/firestore.ts). Only wheat/paddy are seeded here, matching
-  // CLAUDE.md's stated MSP scope; every other crop in the picker is simply not capacity-gated
-  // by default. remainingCapacityQuintals starts equal to dailyCapacityQuintals (nothing bought
-  // yet today); submitQualityCheck()'s Accept step decrements it live, an admin can manually
-  // increase it.
+  // Only wheat and paddy, matching the MSP scope — every other crop is simply not gated.
+  // Remaining starts equal to the daily total: nothing bought yet today.
   const cropCapacityDefs: Record<string, Record<string, number>> = {
     "centre-ksn": { wheat: 500, paddy: 300 },
     "centre-pnp": { wheat: 400, paddy: 250 },
     "centre-snp": { wheat: 300, paddy: 200 },
   };
-  // What each centre pays per grade, in ₹ per quintal. Loosely anchored on real 2024-25 MSP
-  // (wheat ~₹2275/qtl, paddy ~₹2300/qtl) with a grade spread around it, and varied slightly per
-  // centre so the farmer's Centre Selection screen has a *reason* to show a range rather than
-  // three identical rows. These are demo figures, not published rates — the whole point of the
-  // feature is that an admin types the real ones.
+  // Demo figures, not published rates. Anchored near 2024-25 MSP (wheat ~2275/qtl, paddy
+  // ~2300/qtl) with a grade spread, and varied per centre so Centre Selection has a real range
+  // to show rather than three identical rows.
   const gradePriceDefs: Record<string, Record<string, Record<string, number>>> = {
     "centre-ksn": { wheat: { A: 2275, B: 2150, C: 1980 }, paddy: { A: 2300, B: 2180, C: 2000 } },
     "centre-pnp": { wheat: { A: 2260, B: 2140, C: 1970 }, paddy: { A: 2290, B: 2170, C: 1990 } },
@@ -123,10 +115,8 @@ async function seed() {
   }
 
   console.log("Seeding the commodity master...");
-  // The runtime commodity table. Seeded from the same bundled list the app falls back to, so a
-  // seeded Firestore and a fresh clone show the same picker — the difference is that once these
-  // rows exist an admin can edit them (rename, change unit, deactivate) like any commodity they
-  // add themselves. Doc id === the `cropType` string every other collection keys on.
+  // Seeded from the same bundled list the app falls back to, so a seeded project and a fresh
+  // clone show the same picker — except these rows can be edited by an admin.
   for (const commodity of BUILT_IN_COMMODITIES) {
     await db.collection("commodities").doc(commodity.key).set({
       name: commodity.name,
@@ -144,10 +134,8 @@ async function seed() {
     { start: "11:00", end: "12:00", capacity: 20, booked: 6 },
     { start: "14:00", end: "15:00", capacity: 20, booked: 0 }, // fully available
   ];
-  // Same 4 time slots, 3 days out — SlotBookingScreen's Aaj/Kal/Parso date tabs need real data
-  // for all three, not just today. Offset 0 keeps today's original slot IDs (`{centre}-slot-{i}`)
-  // for backward compatibility with scripts/reset.ts; tomorrow/day-after get a `-d{offset}`
-  // suffix so all three days' docs coexist without colliding.
+  // The same 4 slots for 3 days, since the date tabs need real data for all of them. Today
+  // keeps the unsuffixed IDs that reset.ts knows about; the other days get a -d{offset}.
   const dateForOffset = (offset: number) => {
     const d = new Date();
     d.setDate(d.getDate() + offset);

@@ -41,13 +41,11 @@ interface Step {
 }
 
 /**
- * Procurement Status Tracker — UI/UX spec screen 10, wired to real-time listeners (Master Spec
- * build order step 4/5). This is the anti-corruption differentiator from the Winning Strategy
- * doc: every weighing/quality-check write the operator makes reaches this screen live.
- * The payment row reads the payments/ collection directly and deliberately does NOT approximate
- * from booking.status, which flips to "completed" the moment quality-check finishes regardless
- * of payment. It only ticks on a genuine "completed" payment; while the money is raised but
- * unsettled it shows "in process" plus the date the farmer was promised.
+ * The transparency tracker: every weighing and quality-check write reaches this screen live.
+ *
+ * The payment row reads payments/ directly rather than inferring from booking.status, which
+ * flips to "completed" at quality check whether the lot was accepted or rejected. It only ticks
+ * on a settled payment; before that it shows "in process" and the date promised.
  */
 export function ProcurementStatusScreen({ navigation }: Props) {
   const { t } = useLanguage();

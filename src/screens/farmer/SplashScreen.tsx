@@ -11,15 +11,11 @@ import type { Lang } from "../../i18n/strings";
 type Props = NativeStackScreenProps<RootStackParamList, "Splash">;
 
 /**
- * Splash + Language Select — UI/UX spec screen 0. No text entry, just tap to choose.
- * Deliberately only Hindi/English here (a farmer's very first tap on the app) — every other
- * supported language is one tap away in Settings once they're past registration. See
- * i18n/strings.ts's top-of-file comment for the full language list and why.
+ * Splash and language select. Only Hindi and English here — this is a farmer's very first tap,
+ * and the other ten are one tap away in Settings.
  *
- * This is the one farmer screen that doesn't use ScreenContainer — it's centred on the logo and
- * has no Home FAB to return to — so the Help button it would otherwise inherit is mounted by
- * hand. "A visible Help/Call option on every screen" has no exception for the first one; a farmer
- * who can't get past language select is exactly the one who needs the call centre.
+ * The one farmer screen that doesn't use ScreenContainer, so the Help button is mounted by
+ * hand: a farmer stuck on language select is exactly the one who needs the call centre.
  */
 export function SplashScreen({ navigation }: Props) {
   const { setLang, t } = useLanguage();

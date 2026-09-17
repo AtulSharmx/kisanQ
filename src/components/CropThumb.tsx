@@ -12,16 +12,10 @@ interface Props {
 }
 
 /**
- * A crop's photo in a round thumbnail, falling back to its emoji.
- *
- * Both branches occupy exactly the same square so a grid of crop cards doesn't reflow when one
- * commodity has a photo and the next doesn't — which is the normal case the moment an admin adds
- * a commodity from Admin Settings, since only the ten bundled crops ship with an image
- * (see src/data/cropImages.ts).
- *
- * `resizeMode="cover"` rather than pre-cropped square files: the source photos are a mix of
- * portrait and landscape, and letting the platform centre-crop at display time keeps the assets
- * one file each instead of one per size, at no visual cost in a circle this small.
+ * A crop photo in a round thumbnail, falling back to the emoji. Both branches are the same
+ * square, so a grid doesn't reflow when one commodity has a photo and the next doesn't — which
+ * happens as soon as an admin adds a commodity, since only the bundled ten ship images.
+ * cover rather than pre-cropped squares: the sources are a mix of portrait and landscape.
  */
 export function CropThumb({ cropKey, icon, size = 44 }: Props) {
   const source = cropImage(cropKey);

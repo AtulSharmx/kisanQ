@@ -69,22 +69,26 @@ One Firebase backend, three access surfaces built from a single Expo codebase:
 - Advance booking — book a slot for today, tomorrow, or the day after, not just same-day
 - Centre selection ranked by live estimated wait, not just distance, showing each centre's live
   remaining daily buying capacity for the crop being booked
-- **Price range before you travel** — each centre shows the ₹ range that mandi is actually paying
-  for the crop being booked (lowest to highest grade), so a farmer knows the best realistic price
-  for their produce *before* loading the tractor
-- **Express slot** — a fixed-fee, capped-quota priority option (Tatkal-style, never an open
-  bidding war) for a farmer who needs to skip ahead
+- **MSP before you travel** — each centre card shows the crop's official MSP
+  ("MSP: ₹2,585/quintal" for wheat). MSP is one fixed government price, not a range; every value
+  comes from a single config file ([`src/config/msp.ts`](src/config/msp.ts), RMS 2026-27)
 - Digital token with QR code, shareable via WhatsApp; cancel a not-yet-checked-in booking any time
 - **Live Queue** — "X people ahead of you," computed live from the centre's actual queue state,
   not a number frozen at check-in
 - **Procurement Status tracker** — Booked → Arrived → Weighed → Quality-checked → Accepted →
-  Payment, ticking in real time as the operator works
-- **Payment in process, with a date** — the moment a lot is accepted the payment row turns to
-  "payment in process" and prints the date the money is expected (acceptance + 3 days, the MSP
-  72-hour settlement norm), alongside the rate and total. The row only ticks green on an actual
-  settled payment — "processing with no date" is exactly the open-ended limbo the tracker exists
-  to end. Payments are simulated; no money moves
-- Real-time in-app Notifications for every stage change
+  Payment, ticking in real time as the operator works. Every weight is shown in quintals
+- **Moisture & deduction breakdown** — once a lot is accepted the farmer sees the full sum:
+  weight × MSP, moisture found vs the allowed limit, the excess, the ₹ deduction *and the rule it
+  came from*, and the final amount. Every number is stored on the procurement record, so what the
+  farmer saw at the mandi can't be quietly changed later
+- **Payment stages with a date** — Quality accepted → J-Form generated → Payment sent →
+  Credited to bank, as a step tracker on the Payment screen, with the expected date (acceptance
+  + 3 days, the MSP 72-hour settlement norm). Payments are simulated; no money moves
+- **"आपत्ति दर्ज करें" / Raise an objection** — after weighing or quality check the farmer can
+  dispute the result (weight wrong / quality or moisture wrong / other, plus an optional note) and
+  watch its status (open → resolved) live
+- Real-time in-app Notifications (Hindi + English) for every stage change, each also sent as a
+  (simulated) SMS
 - **Photographs, not emoji, in the crop picker** — ten openly-licensed Wikimedia Commons photos
   (credited in Settings and in [`assets/crops/CREDITS.md`](assets/crops/CREDITS.md)), so bajra and
   jowar are told apart by sight rather than by reading the label. A commodity an admin adds at
@@ -98,11 +102,11 @@ One Firebase backend, three access surfaces built from a single Expo codebase:
 - Live queue management (Waiting / Processing / Completed) with one-tap "Call Next"
 - Weighing (expected vs. actual) and quality check (moisture %, grade, Accept/Reject with a
   confirm step) — both push an instant notification to the farmer
-- **Rate entry on the quality check** — the operator types the ₹/unit actually being paid (never
-  a hardcoded per-grade number). Picking a grade pre-fills that grade's rate as set by the admin,
-  but the typed value always wins, and the payable total (`weight × rate`) is shown live before
-  Accept. Accepting without a rate is blocked. Accepting raises the payment and stamps the
-  expected payment date the farmer sees on their tracker
+- **MSP pricing on the quality check** — the operator enters moisture % (stepper or typed) and
+  grade; the price is never typed. The screen shows the same breakdown the farmer will get
+  (weight × MSP − moisture deduction) live before Accept. A crop without a verified MSP can't be
+  accepted (it can still be rejected). The operator's staff ID is stored on the procurement record
+  for weighing and for quality check
 - **Real URLs and a back button** — every staff screen has its own path (`/checkin`, `/queue`,
   `/weighing`, `/quality-check`, `/admin`, `/admin/centres`, …), so browser Back and Forward
   work, a reload keeps you where you were, and a screen can be bookmarked or shared. Weighing
@@ -119,12 +123,17 @@ One Firebase backend, three access surfaces built from a single Expo codebase:
   doesn't fit is rejected with the exact quintals still available
 - **Commodity master** — wheat and paddy aren't hardcoded. Commodities live in their own Firestore
   collection with a name, icon and unit (quintal/ton); an admin adds a new one from Settings at
-  runtime and it immediately appears everywhere — capacity rows, grade pricing, the farmer's crop
+  runtime and it immediately appears everywhere — capacity rows, the farmer's crop
   picker — with no code change and no redeploy. Commodities are deactivated rather than deleted, so
   a crop already referenced by past bookings can never dangle
-- **Grade-based pricing** — under each crop's capacity row, the admin types the ₹/unit for grade
-  A, B and C separately (typed, never fixed per grade letter). Those rates drive the farmer's
-  price range and pre-fill the operator's quality-check rate field
+- **Payments** — every simulated payment with its stage, and a button to move it to the next
+  stage; each move notifies the farmer in-app and by SMS
+- **Objections** — every farmer objection with the operator who did the weighing/quality check,
+  and a "Mark resolved" button (admin-only in the security rules)
+- **SMS Log** — every SMS the system sent, with masked mobile numbers, clearly labelled
+  *"Simulated — gateway to be integrated in production"*. `sendSms()` in
+  [`src/services/sms.ts`](src/services/sms.ts) is the only function to change to plug in a real
+  gateway (e.g. MSG91)
 
 ## Tech stack
 
@@ -261,13 +270,20 @@ for the canonical spec:
 
 `farmers`, `identityVerification`, `crops`, `centres`, `slots`, `bookings`, `queue`,
 `procurement`, `payments`, `notifications`, `staff`, `staffSessions`, `tokenCounters`,
-`queuePositionCounters`, `commodities`, `centreCropCapacity` (the last six are internal, not in
-the Master Spec — see the comments in `src/types/firestore.ts`).
+`queuePositionCounters`, `commodities`, `centreCropCapacity`, `objections`, `smsLog` (the last
+eight are not in the Master Spec — see the comments in `src/types/firestore.ts`).
 
 `commodities/{cropType}` is the runtime commodity master (name, icon, unit, `active`), and
 `centreCropCapacity/{centreId}_{cropType}` holds that mandi's daily capacity for that one
-commodity plus its per-grade `gradePrices` map — one row per (centre, crop) pair, which is what
-keeps each commodity's capacity and rates independent of every other commodity's.
+commodity — one row per (centre, crop) pair, which keeps each commodity's capacity independent
+of every other commodity's. Prices are not stored per centre: MSP, moisture limits and the
+(DEMO) deduction rate live in [`src/config/msp.ts`](src/config/msp.ts).
+
+`procurement` records carry the whole payment breakdown (`mspPerQuintal`, `grossAmount`,
+`moisturePct`, `moistureLimitPct`, `excessMoisturePct`, `deductionPctPerPoint`, `deductionRule`,
+`deductionAmount`, `finalAmount`) plus `weighedByStaffId` / `qualityCheckedByStaffId`.
+`payments.status` is one of `quality_accepted → jform_generated → payment_sent → credited`.
+`objections/{bookingId}_{weighing|quality}` holds farmer disputes; `smsLog` the simulated SMS.
 
 ## Build status
 
@@ -284,7 +300,10 @@ All 7 steps of the Master Spec's build order are done:
 | 7 | UI polish pass on the Farmer App | ✅ |
 
 Known, documented gaps (not oversights — see `CLAUDE.md` and the relevant code comments for
-the reasoning): payment processing is simulated only and isn't wired up yet; staff PIN
+the reasoning): payments and SMS are simulated only (no bank, no SMS gateway); MSPs for
+Kharif crops (paddy, bajra, jowar, maize, cotton, moong) and sugarcane's FRP are not yet
+configured, so those crops can be booked but not accepted; moisture limits are configured for
+wheat only, and the deduction rate is a DEMO value; staff PIN
 verification happens client-side (a Cloud Function would be needed to verify it server-side);
 and a handful of Firestore list-query security rules are intentionally broader than
 single-document rules because Firestore can't secure a list query with a role check that

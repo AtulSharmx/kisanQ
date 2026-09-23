@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
-import { colors, fontSize, radius, shadow, spacing, touchTarget } from "../../theme";
+import { colors, fontSize, radius, spacing, touchTarget } from "../../theme";
 import { useLanguage } from "../../context/LanguageContext";
 import { useFarmer } from "../../context/FarmerContext";
 import { ScreenContainer } from "../../components/ScreenContainer";
@@ -12,7 +12,6 @@ import {
   createBooking,
   getCentreCropCapacity,
   getCrop,
-  getExpressAvailability,
   listSlotsForCentreOnDate,
   type CropWithId,
   type SlotWithId,
@@ -24,7 +23,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "SlotBooking">;
 const DATE_LABEL_KEYS = ["dateToday", "dateTomorrow", "dateDayAfter"] as const;
 
 /** Slot Booking -> Token — UI/UX spec screen 8 (booking half), extended with advance booking
- * (today/tomorrow/day-after date tabs) and an optional Express (Tatkal-style) slot. */
+ * (today/tomorrow/day-after date tabs). */
 export function SlotBookingScreen({ route, navigation }: Props) {
   const { centreId, cropId } = route.params;
   const { t } = useLanguage();
@@ -33,10 +32,6 @@ export function SlotBookingScreen({ route, navigation }: Props) {
   const [dateIndex, setDateIndex] = useState(0);
   const [slots, setSlots] = useState<SlotWithId[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const [express, setExpress] = useState<{ available: boolean; price: number; remaining: number } | null>(
-    null
-  );
-  const [wantsExpress, setWantsExpress] = useState(false);
   const [crop, setCrop] = useState<CropWithId | null>(null);
   const [capacity, setCapacity] = useState<CentreCropCapacity | null>(null);
   const [booking, setBooking] = useState(false);
@@ -61,18 +56,17 @@ export function SlotBookingScreen({ route, navigation }: Props) {
   }, [centreId, crop]);
 
   useEffect(() => {
+    listSlotsForCentreOnDate(centreId, selectedDate).then(setSlots);
+  }, [centreId, selectedDate]);
+
+  // Switching day clears the old day's slots/selection in the same event, so the grid shows a
+  // loader instead of briefly offering the previous day's times.
+  const onPickDate = (i: number) => {
+    if (i === dateIndex) return;
     setSlots(null);
     setSelected(null);
-    setWantsExpress(false);
-    listSlotsForCentreOnDate(centreId, selectedDate).then(setSlots);
-    getExpressAvailability(centreId, selectedDate).then((res) =>
-      setExpress({
-        available: res.available,
-        price: res.price,
-        remaining: 2 - (res.nextRank - 1), // EXPRESS_QUOTA_PER_DAY is 2 — see firestoreService.ts
-      })
-    );
-  }, [centreId, selectedDate]);
+    setDateIndex(i);
+  };
 
   const onConfirm = async () => {
     if (!selected || !farmerId || !crop) return;
@@ -88,7 +82,6 @@ export function SlotBookingScreen({ route, navigation }: Props) {
         // Lets the capacity gate reject a load that's bigger than what's left for *this*
         // commodity today, instead of only refusing once the centre hits exactly zero.
         expectedQuantity: crop.expectedQuantity,
-        wantsExpress,
       });
       navigation.replace("Token", { bookingId: result.bookingId });
     } catch (e) {
@@ -105,17 +98,11 @@ export function SlotBookingScreen({ route, navigation }: Props) {
         // number is the difference between "try something else" and "bring 40 instead of 60."
         const remaining = e.message.split(":")[1];
         setError(t("centreCapacityInsufficient").replace("{n}", remaining));
-      } else if (e instanceof Error && e.message === "EXPRESS_SOLD_OUT") {
-        setError(t("expressSoldOut"));
-        setWantsExpress(false);
       } else {
         setError(t("saveFailed"));
       }
       // State may have just changed under us — refresh so the screen reflects reality.
       listSlotsForCentreOnDate(centreId, selectedDate).then(setSlots);
-      getExpressAvailability(centreId, selectedDate).then((res) =>
-        setExpress({ available: res.available, price: res.price, remaining: 2 - (res.nextRank - 1) })
-      );
       if (crop) getCentreCropCapacity(centreId, crop.cropType).then(setCapacity);
       setSelected(null);
     } finally {
@@ -131,7 +118,7 @@ export function SlotBookingScreen({ route, navigation }: Props) {
         {dates.map((date, i) => (
           <Pressable
             key={date}
-            onPress={() => setDateIndex(i)}
+            onPress={() => onPickDate(i)}
             style={({ pressed }) => [
               styles.dateTab,
               dateIndex === i && styles.dateTabActive,
@@ -178,30 +165,6 @@ export function SlotBookingScreen({ route, navigation }: Props) {
               );
             })}
           </View>
-
-          {express?.available && (
-            <Pressable
-              onPress={() => setWantsExpress((w) => !w)}
-              style={({ pressed }) => [
-                styles.expressCard,
-                wantsExpress && styles.expressCardActive,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={styles.expressTitle}>
-                {wantsExpress ? "✓ " : ""}
-                {t("expressOptionTitle")}
-              </Text>
-              <Text style={styles.expressDesc}>
-                {t("expressOptionDesc")
-                  .replace("{price}", String(express.price))
-                  .replace("{remaining}", String(express.remaining))}
-              </Text>
-            </Pressable>
-          )}
-          {express && !express.available && (
-            <Text style={styles.expressSoldOut}>{t("expressSoldOut")}</Text>
-          )}
         </>
       )}
 
@@ -256,25 +219,6 @@ const styles = StyleSheet.create({
   slotFull: { backgroundColor: colors.disabled, borderColor: colors.disabled },
   slotText: { fontSize: fontSize.label, fontWeight: "700", color: colors.text },
   slotTextFull: { color: colors.textMuted, textDecorationLine: "line-through" },
-  expressCard: {
-    marginTop: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 2,
-    borderColor: colors.accent,
-    backgroundColor: colors.surface,
-    gap: spacing.xs,
-    ...shadow.card,
-  },
-  expressCardActive: { backgroundColor: colors.accentTint },
-  expressTitle: { fontSize: fontSize.label, fontWeight: "800", color: colors.text },
-  expressDesc: { fontSize: fontSize.body, color: colors.textMuted },
-  expressSoldOut: {
-    marginTop: spacing.md,
-    fontSize: fontSize.body,
-    color: colors.textMuted,
-    textAlign: "center",
-  },
   error: { color: colors.error, textAlign: "center", marginTop: spacing.md },
   spacer: { height: spacing.xl },
   pressed: { opacity: 0.7 },

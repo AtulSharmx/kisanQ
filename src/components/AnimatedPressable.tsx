@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import { Animated, Pressable, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
 
 const AnimatedPressableBase = Animated.createAnimatedComponent(Pressable);
@@ -40,7 +40,9 @@ export function AnimatedPressable({
   onPressOut,
   ...rest
 }: Props) {
-  const scale = useRef(new Animated.Value(1)).current;
+  // Lazy useState rather than useRef(...).current: one Animated.Value for the component's
+  // lifetime, without reading a ref during render.
+  const [scale] = useState(() => new Animated.Value(1));
   const [pressed, setPressed] = useState(false);
 
   const animateTo = (toValue: number) => {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/types";
@@ -60,7 +60,7 @@ export function HomeScreen({ navigation }: Props) {
         <IconTile
           icon="💰"
           label={t("homePayment")}
-          onPress={() => navigation.navigate("ComingSoon", { titleKey: "homePayment" })}
+          onPress={() => navigation.navigate("Payment")}
         />
         <IconTile
           icon="🔔"

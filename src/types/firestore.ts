@@ -117,19 +117,6 @@ export interface CentreCropCapacity {
   cropType: string;
   dailyCapacityQuintals: number;
   remainingCapacityQuintals: number;
-  /**
-   * Grade -> price the centre pays for that grade, in ₹ per unit of the commodity (see
-   * `Commodity.unit`). Typed in by an admin, never derived from the grade letter — the whole
-   * point is that the rate is a real policy number that varies by mandi and by season, so the
-   * app must not pretend to know that "A" means any particular figure.
-   *
-   * Optional, like the capacity doc itself: a (centre, commodity) pair with no prices set is
-   * simply not publishing a rate yet, and the operator types the price free-hand at quality
-   * check instead of having it pre-filled. Keyed by the same grade letters as
-   * src/data/grades.ts; an unknown key is ignored rather than being an error, so changing the
-   * grade scale later doesn't corrupt existing docs.
-   */
-  gradePrices?: Record<string, number>;
 }
 
 /** slots/{slotId} */
@@ -174,13 +161,11 @@ export interface Booking {
   status: BookingStatus;
   checkedInByStaffId?: string;
   /**
-   * Express (Tatkal-style) priority booking — a fixed, transparent, capped-quota official fee
-   * (never a live bid/auction — see EXPRESS_PRICES/EXPRESS_QUOTA_PER_DAY in firestoreService.ts)
-   * to be processed ahead of the regular queue. `expressFeePaid` is simulated, like every other
-   * payment in this app (CLAUDE.md rule 6) — no real money moves.
+   * When the booking was made. Lets the farmer's Procurement Status / Payment screens find their
+   * most recent booking even after it's "completed" (which is exactly when the payment breakdown
+   * and stages matter). Optional only for bookings created before this field existed.
    */
-  isExpress?: boolean;
-  expressFeePaid?: number;
+  createdAt?: Timestamp;
 }
 
 export type QueueStatus = "waiting" | "processing" | "completed";
@@ -196,8 +181,6 @@ export interface QueueEntry {
   position: number;
   status: QueueStatus;
   estimatedWaitMinutes: number;
-  /** Copied from Booking.isExpress at check-in time — see queueSortKey() in firestoreService.ts. */
-  isExpress?: boolean;
 }
 
 export type QualityStatus = "pending" | "accepted" | "rejected";
@@ -208,25 +191,55 @@ export type ProcurementStatus =
   | "completed"
   | "rejected";
 
-/** procurement/{procurementId} */
+/**
+ * procurement/{procurementId}
+ *
+ * Every number the farmer is paid on is stored here, not recomputed on their phone later — so the
+ * breakdown they saw at the mandi is the one on record (the transparency pitch: weight, moisture,
+ * deduction and amount can't be quietly changed after the fact). Pricing always comes from
+ * src/config/msp.ts: final = actualWeight × MSP − moisture deduction. The pricing fields are null
+ * until quality check, and stay null on a rejection (nothing was bought).
+ */
 export interface Procurement {
   bookingId: string;
+  /** Quintals. */
   actualWeight: number | null;
   qualityStatus: QualityStatus;
   moisturePct: number | null;
   grade: string | null;
-  /**
-   * ₹ per unit actually paid for this lot, typed in by the operator at quality check (pre-filled
-   * from the centre's configured price for the chosen grade, but always editable — the rate is
-   * never fixed by the grade letter alone). Null until quality check happens; on a rejection it
-   * stays null, since nothing was bought.
-   */
-  pricePerUnit: number | null;
   procurementStatus: ProcurementStatus;
   rejectionReason?: string;
+  /** Official MSP applied, ₹ per quintal (src/config/msp.ts). */
+  mspPerQuintal: number | null;
+  /** weight × MSP. */
+  grossAmount: number | null;
+  /** Moisture limit applied; null = no limit configured for this crop (no deduction). */
+  moistureLimitPct: number | null;
+  excessMoisturePct: number | null;
+  /** % of MSP value deducted per 1 point of excess moisture (DEMO value — see msp.ts). */
+  deductionPctPerPoint: number | null;
+  /** Canonical English statement of the deduction rule applied. */
+  deductionRule: string | null;
+  deductionAmount: number | null;
+  finalAmount: number | null;
+  /** Audit trail — which operator weighed / quality-checked this lot (objections reference these). */
+  weighedByStaffId?: string;
+  qualityCheckedByStaffId?: string;
 }
 
-export type PaymentStatus = "processing" | "completed";
+/**
+ * Payment stages, in order. Replaces the old single "processing" status so the farmer can see
+ * exactly where their money is: Quality accepted -> J-Form generated -> Payment sent -> Credited
+ * to bank. Only an admin moves a payment forward (advancePaymentStage()), one stage at a time.
+ */
+export type PaymentStage = "quality_accepted" | "jform_generated" | "payment_sent" | "credited";
+
+export const PAYMENT_STAGES: PaymentStage[] = [
+  "quality_accepted",
+  "jform_generated",
+  "payment_sent",
+  "credited",
+];
 
 /**
  * payments/{paymentId}
@@ -234,17 +247,21 @@ export type PaymentStatus = "processing" | "completed";
  */
 export interface Payment {
   procurementId: string;
+  bookingId: string;
+  farmerId: string;
+  /** Final amount (weight × MSP − deduction), ₹. */
   amount: number;
-  status: PaymentStatus;
+  status: PaymentStage;
+  /** Simulated reference, assigned when the payment reaches "payment_sent". */
   transactionReference: string | null;
   /**
-   * The date the farmer is told to expect the money, as "YYYY-MM-DD" — set when the payment is
-   * raised at quality check and never moved afterwards, so a farmer can hold the app to the date
-   * it originally promised. Stored as a plain date string rather than a Timestamp because it is a
-   * calendar date, not an instant: "you will be paid on the 18th" must not shift with the reader's
-   * timezone. Optional only for payment docs written before this field existed.
+   * Accept date + 3 days (72 hours), as "YYYY-MM-DD" — set when the payment is raised and never
+   * moved afterwards, so the farmer can hold the system to the date it originally promised.
+   * A calendar date string rather than a Timestamp so it can't shift with the reader's timezone.
    */
-  expectedPaymentDate?: string;
+  expectedPaymentDate: string;
+  /** When each stage was reached. */
+  stageUpdatedAt: Partial<Record<PaymentStage, Timestamp>>;
 }
 
 export type NotificationType =
@@ -254,17 +271,25 @@ export type NotificationType =
   | "call_next"
   | "weighing_recorded"
   | "quality_checked"
-  | "payment_processing"
-  | "payment_completed";
+  | "payment_processing" // stage: quality_accepted
+  | "payment_jform_generated"
+  | "payment_sent"
+  | "payment_completed"; // stage: credited
 
 export type NotificationChannel = "in_app" | "sms";
 export type NotificationStatus = "unread" | "read";
 
-/** notifications/{notificationId} */
+/**
+ * notifications/{notificationId}
+ * `message` is Hindi (the default language, and the SMS text); `messageEn` is shown when the app
+ * is in English. Optional only for notifications written before it existed.
+ */
 export interface AppNotification {
   farmerId: string;
+  bookingId?: string;
   type: NotificationType;
   message: string;
+  messageEn?: string;
   channel: NotificationChannel;
   status: NotificationStatus;
   createdAt: Timestamp;
@@ -301,15 +326,46 @@ export interface QueuePositionCounter {
   count: number;
 }
 
+export type ObjectionStage = "weighing" | "quality";
+export type ObjectionReason = "weight" | "quality" | "other";
+export type ObjectionStatus = "open" | "resolved";
+
 /**
- * expressSlotCounters/{centreId_date}
- * Same one-doc-per-centre-per-day counter pattern as tokenCounters/queuePositionCounters —
- * tracks how many of the fixed EXPRESS_QUOTA_PER_DAY Tatkal-style slots have been sold for a
- * centre on a given date, so createBooking()'s transaction can atomically enforce the cap
- * (see firestoreService.ts EXPRESS_PRICES / EXPRESS_QUOTA_PER_DAY).
+ * objections/{bookingId}_{stage}
+ * A farmer disputing a recorded weight or quality/moisture result. The doc id is deterministic
+ * (one objection per booking per stage), which lets the farmer's phone read their own objection
+ * with single-document reads — firestore.rules can't scope a *list* query by owner without the
+ * get()-in-list-queries problem described in CLAUDE.md. `operatorStaffId` is copied from the
+ * procurement record's weighedByStaffId / qualityCheckedByStaffId, so the admin sees who is being
+ * objected against. Only an admin can change `status`.
  */
-export interface ExpressSlotCounter {
-  count: number;
+export interface Objection {
+  bookingId: string;
+  farmerId: string;
+  centreId: string;
+  procurementId: string;
+  stage: ObjectionStage;
+  operatorStaffId: string | null;
+  reason: ObjectionReason;
+  note: string;
+  status: ObjectionStatus;
+  createdAt: Timestamp;
+  resolvedAt?: Timestamp;
+  resolvedByStaffId?: string;
+}
+
+/**
+ * smsLog/{id}
+ * Every farmer notification is also "sent" as an SMS through sendSms() (src/services/sms.ts).
+ * No gateway is wired yet, so each entry is status "simulated". The mobile number is stored
+ * masked — the log is an audit trail, not a phone directory.
+ */
+export interface SmsLogEntry {
+  mobileMasked: string;
+  text: string;
+  bookingId: string | null;
+  status: "simulated";
+  createdAt: Timestamp;
 }
 
 /**
@@ -346,7 +402,8 @@ export const COLLECTIONS = {
   notifications: "notifications",
   tokenCounters: "tokenCounters",
   queuePositionCounters: "queuePositionCounters",
-  expressSlotCounters: "expressSlotCounters",
+  objections: "objections",
+  smsLog: "smsLog",
   staff: "staff",
   staffSessions: "staffSessions",
 } as const;

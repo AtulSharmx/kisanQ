@@ -141,12 +141,12 @@ Eight tiles, everything one tap away, no hamburger menu:
   the "reach the mandi at 4am and hope" behaviour.
 - **Centres ranked by live estimated wait**, not just distance — and each centre shows its **remaining
   daily buying capacity** for the crop being booked.
-- **A price range per centre** — the ₹/quintal that mandi is actually paying, lowest grade to highest.
-  > This is a genuinely strong line: *"Farmer ko tractor lodne se pehle pata hai ki kaunsi mandi kitna
-  > de rahi hai."* Price discovery before travel, not after.
-- **Express slot (Tatkal-style):** a fixed fee, a capped quota. If a judge frowns, get ahead of it:
-  it is a **fixed** fee with a **hard cap**, deliberately not an open bidding war, because auctioning
-  queue position would price out exactly the farmer this is for.
+- **The official MSP on every centre card** — "MSP: ₹2,585/quintal" for wheat (RMS 2026-27). MSP is
+  one fixed government price, so it is the same number at every centre — we show it, we never show a
+  "range".
+  > *"Farmer ko tractor lodne se pehle pata hai ki use kis bhav par paisa milna chahiye."*
+- **No paid priority.** There is no way to pay to jump the queue — everyone is served in arrival
+  order. (An earlier "Express slot" idea was removed on purpose.)
 - Time slot grid → confirm.
 - If the crop does not fit the centre's remaining capacity, the error tells you **how many quintals
   are actually left**, not a flat "centre full".
@@ -173,20 +173,31 @@ Six steps, each with an icon *and* a text label (never colour alone):
 
 Keep this screen open on the phone while the Second works the operator laptop. See §5.
 
+The same screen shows the **full payment breakdown** once the lot is accepted: weight × MSP, moisture
+found vs the allowed limit (12% for wheat), the excess, the **₹ deduction and the rule it came from**,
+and the final amount. Example: 20 quintal wheat at 13.5% moisture → ₹51,700 − ₹776 = **₹50,924**.
+(The deduction *rate* is a demo value — say so if asked.)
+
+And the **"आपत्ति दर्ज करें" (Raise an objection)** button: after weighing or quality check the
+farmer can say "weight is wrong" / "quality or moisture is wrong" / other, and sees the objection's
+status (open → resolved) live. The admin sees it with the **operator's name** on it.
+
 ### 3.10 Payment
 
-Rate per quintal, total, and — the part to slow down on — **"Payment in process"** with an
-**expected payment date** (acceptance + 3 days, following the 72-hour MSP settlement norm).
+A step tracker: **Quality accepted → J-Form generated → Payment sent → Credited to bank**, with the
+**expected payment date** (acceptance + 3 days, following the 72-hour MSP settlement norm), plus the
+same breakdown.
 
 > Why it matters, in one line: *"Processing likh dena aur date na dena — wahi to farmer ka asli
 > problem hai."* An open-ended "processing" is the limbo this whole tracker exists to end.
-> The row only turns green on an actually settled payment.
+> Every stage change also arrives as a notification and an SMS.
 
 **Say it plainly: payments are simulated. No money moves.** Do not let a judge discover that.
 
 ### 3.11 Notifications & Settings
 
-Real-time in-app notification for every stage change. Settings has the 12 languages, the photo
+Real-time in-app notification (Hindi + English) for every stage change — and every one is also
+"sent" as an SMS (simulated; the admin's SMS Log shows them). Settings has the 12 languages, the photo
 credits, and an explicit logout.
 
 ---
@@ -202,7 +213,7 @@ worth demonstrating for two seconds, because it is the difference between a demo
 | Scan / Check-in | `/checkin` | QR scan, **with a manual token-entry box always visible** |
 | Live Queue Management | `/queue` | The day's queue; a row in "Processing" opens weighing |
 | Weighing | `/weighing` | Expected qty vs **actual weight** → confirm |
-| Quality Check | `/quality-check` | Moisture %, grade, ₹/unit, Accept / Reject |
+| Quality Check | `/quality-check` | Moisture %, grade, live MSP breakdown, Accept / Reject |
 | Settings | `/settings` | Language + logout |
 
 Things to point out while you are there:
@@ -211,10 +222,10 @@ Things to point out while you are there:
   because a cracked screen or a dead phone at the gate cannot be allowed to stop procurement.
 - **Weighing shows expected vs actual side by side.** The farmer said 20 quintals; the scale says
   19.4. Both numbers are on the record.
-- **Quality check** takes moisture %, a grade, and the **₹/unit actually being paid** — pre-filled
-  from the rate the admin configured for that grade, but the operator can override it, and the
-  **payable total updates live before Accept is pressed**. Accept and Reject both ask for
-  confirmation first.
+- **Quality check** takes moisture % and a grade. **The operator never types a price** — the lot is
+  paid at the official MSP, and the screen shows the same breakdown the farmer will get (weight ×
+  MSP, moisture vs limit, deduction, final amount) **live before Accept is pressed**. Accept and
+  Reject both ask for confirmation first. The operator's staff ID goes on the record.
 - Reject needs a **reason**. A rejection without a reason is exactly the opaque decision farmers
   complain about.
 
@@ -230,9 +241,10 @@ Second is on the laptop at `/queue`, screen also facing the judges.
 1. **Second** opens the farmer's row → **Weighing** → types an actual weight → Confirm.
 2. **Driver says nothing and just tilts the phone.** The "Weighed" step ticks on its own. Let the
    silence do the work for one beat, then: *"Ye phone maine chhua tak nahi."*
-3. **Second** goes to **Quality Check** → moisture %, grade, rate → the total appears → **Accept**.
-4. **Driver:** "Quality checked" and "Accepted" tick; the **payment row turns to "payment in process"
-   with the expected date**.
+3. **Second** goes to **Quality Check** → sets moisture to e.g. **13.5%**, grade → the breakdown with
+   the deduction appears → **Accept**.
+4. **Driver:** "Quality checked" and "Accepted" tick; the **breakdown with the moisture deduction and
+   the payment stages with the expected date** appear.
 5. **Driver, one line, then stop talking:**
    > *"Jo weight operator ne likha, wahi farmer ke phone par hai — usi second. Ab under-weighing
    > chhupana possible nahi hai. Yehi hamara asli product hai."*
@@ -267,11 +279,14 @@ Also on this screen, and worth 20 seconds because judges ask "kya ye sirf gehun-
 
 - **Daily buying capacity per centre, per crop** — a mandi can take 500 quintals of wheat and 200 of
   mustard on the same day, and those are separate limits.
-- **Grade-based pricing** — the admin types ₹/unit per grade; those rates drive the price range the
-  farmer sees *before* travelling and pre-fill the operator's quality check.
+- **Payments** — move a payment to its next stage (J-Form → Sent → Credited); the farmer's phone
+  updates live and gets a notification + SMS.
+- **Objections** — every farmer objection with the **operator who did the weighing/quality check**.
+  A pattern of objections against one operator is exactly the fraud signal we promise to surface.
+- **SMS Log** — clearly labelled *"Simulated — gateway to be integrated in production"*.
 - **Commodity master** — wheat and paddy are **not hardcoded**. An admin adds a commodity from
-  Settings and it appears immediately in the farmer's crop picker, in capacity rows and in grade
-  pricing **with no code change and no app update**. Commodities are deactivated, never deleted, so a
+  Settings and it appears immediately in the farmer's crop picker and capacity rows
+  **with no code change and no app update**. Commodities are deactivated, never deleted, so a
   crop referenced by an old booking can never dangle.
 
 If a judge asks whether it works: add a commodity live in front of them and pull-to-refresh the
@@ -317,14 +332,14 @@ default. The real production gap we already know about is moving staff role chec
 custom claims; we can name it because we have already identified it.
 
 **"What is real and what is mocked?"** *(Answer this honestly — it builds more credit than it costs.)*
-Mocked: Aadhaar + OTP, and payments are simulated — no money moves. SMS/IVR is architecture-only.
+Mocked: Aadhaar + OTP; payments are simulated — no money moves; SMS is simulated (every SMS is
+written to a log, the real gateway plugs into one function); the moisture deduction rate is a demo
+value. MSP values are the real RMS 2026-27 figures. IVR is architecture-only.
 Real: everything else. Real Firebase backend, real database, real-time listeners, three real portals,
 real security rules, a real signed APK you can install right now.
 
-**"Express slot — isn't that paying to cut the queue?"**
-Fixed fee, hard quota cap, never an auction. A farmer with a truck waiting and a perishable load has
-a real emergency; the alternative in the real world is paying someone informally. Capping it keeps it
-from becoming a bidding war.
+**"Can someone pay to jump the queue?"**
+No. Everyone is served in arrival order; there is no paid priority of any kind.
 
 **"How long did this take / is it your own work?"**
 Show the GitHub repo and the commit history. It is the best possible answer and it takes five seconds.

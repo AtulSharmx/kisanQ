@@ -9,7 +9,6 @@ import { useLanguage } from "../../context/LanguageContext";
 import { useOperator } from "../../context/OperatorContext";
 import {
   callNextInQueue,
-  compareQueueEntries,
   getBooking,
   getFarmer,
   listenQueueForCentre,
@@ -77,10 +76,8 @@ export function LiveQueueManagementScreen({ navigation }: Props) {
     () =>
       rows
         .filter((r) => r.queue.status === activeTab)
-        // Express (Tatkal-style) entries sort first within "Waiting" so the operator naturally
-        // works them next — same rule the farmer's own Live Queue screen uses, via
-        // compareQueueEntries(), so the two screens never disagree about who's actually ahead.
-        .sort((a, b) => compareQueueEntries(a.queue, b.queue)),
+        // Arrival order — the same order the farmer's own Live Queue screen counts "people ahead" in.
+        .sort((a, b) => a.queue.position - b.queue.position),
     [rows, activeTab]
   );
 
@@ -140,7 +137,6 @@ export function LiveQueueManagementScreen({ navigation }: Props) {
         {visibleRows.map((row) => (
           <View key={row.queue.id} style={styles.row}>
             <View>
-              {row.queue.isExpress && <Text style={styles.expressBadge}>{t("expressBadge")}</Text>}
               <Text style={styles.token}>{row.tokenNumber}</Text>
               <Text style={styles.name}>{row.farmerName}</Text>
               <Text style={styles.wait}>
@@ -201,7 +197,6 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   token: { fontSize: fontSize.label, fontWeight: "800", color: colors.primary },
-  expressBadge: { fontSize: fontSize.body, fontWeight: "800", color: colors.accent },
   name: { fontSize: fontSize.body, color: colors.text },
   wait: { fontSize: fontSize.body, color: colors.textMuted },
   pressed: { opacity: 0.7 },

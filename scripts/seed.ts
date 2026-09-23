@@ -19,6 +19,16 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { BUILT_IN_COMMODITIES } from "../src/data/commodities";
+import { computeBreakdown } from "../src/config/msp";
+import { expectedPaymentDate } from "../src/utils/paymentDates";
+import {
+  paymentStageText,
+  qualityAcceptedText,
+  weighingText,
+  callNextText,
+  type NotificationText,
+} from "../src/services/notificationText";
+import { maskMobile } from "../src/utils/maskMobile";
 
 // Matches src/services/pinAuth.ts (plain SHA-256, no salt — good enough to keep PINs out of
 // plaintext in a prototype, not a production-grade credential store).
@@ -85,28 +95,20 @@ async function seed() {
       .set({ ...centre, location: new GeoPoint(location.lat, location.lng) });
   }
 
-  console.log("Seeding per-crop daily buying capacity (wheat, paddy — CLAUDE.md's MSP scope)...");
+  console.log("Seeding per-crop daily buying capacity (wheat, mustard)...");
   // Daily Buying Capacity feature — opt-in per (centre, crop) pair (see the type comment on
-  // CentreCropCapacity in src/types/firestore.ts). Only wheat/paddy are seeded here, matching
-  // CLAUDE.md's stated MSP scope; every other crop in the picker is simply not capacity-gated
-  // by default. remainingCapacityQuintals starts equal to dailyCapacityQuintals (nothing bought
+  // CentreCropCapacity in src/types/firestore.ts). Only wheat and mustard are seeded — two Rabi
+  // crops with a verified RMS 2026-27 MSP in src/config/msp.ts (paddy has no verified MSP
+  // configured yet, so a paddy lot couldn't be accepted in the demo). Every other crop in the
+  // picker is simply not capacity-gated by default. remainingCapacityQuintals starts equal to dailyCapacityQuintals (nothing bought
   // yet today); submitQualityCheck()'s Accept step decrements it live, an admin can manually
   // increase it.
   const cropCapacityDefs: Record<string, Record<string, number>> = {
-    "centre-ksn": { wheat: 500, paddy: 300 },
-    "centre-pnp": { wheat: 400, paddy: 250 },
-    "centre-snp": { wheat: 300, paddy: 200 },
+    "centre-ksn": { wheat: 500, mustard: 300 },
+    "centre-pnp": { wheat: 400, mustard: 250 },
+    "centre-snp": { wheat: 300, mustard: 200 },
   };
-  // What each centre pays per grade, in ₹ per quintal. Loosely anchored on real 2024-25 MSP
-  // (wheat ~₹2275/qtl, paddy ~₹2300/qtl) with a grade spread around it, and varied slightly per
-  // centre so the farmer's Centre Selection screen has a *reason* to show a range rather than
-  // three identical rows. These are demo figures, not published rates — the whole point of the
-  // feature is that an admin types the real ones.
-  const gradePriceDefs: Record<string, Record<string, Record<string, number>>> = {
-    "centre-ksn": { wheat: { A: 2275, B: 2150, C: 1980 }, paddy: { A: 2300, B: 2180, C: 2000 } },
-    "centre-pnp": { wheat: { A: 2260, B: 2140, C: 1970 }, paddy: { A: 2290, B: 2170, C: 1990 } },
-    "centre-snp": { wheat: { A: 2280, B: 2160, C: 1990 }, paddy: { A: 2310, B: 2190, C: 2010 } },
-  };
+  // No per-centre prices: every lot is paid at the single official MSP from src/config/msp.ts.
   for (const [centreId, byCrop] of Object.entries(cropCapacityDefs)) {
     for (const [cropType, dailyCapacityQuintals] of Object.entries(byCrop)) {
       await db
@@ -117,7 +119,6 @@ async function seed() {
           cropType,
           dailyCapacityQuintals,
           remainingCapacityQuintals: dailyCapacityQuintals,
-          gradePrices: gradePriceDefs[centreId]?.[cropType] ?? {},
         });
     }
   }
@@ -205,7 +206,7 @@ async function seed() {
     const cropId = `crop-demo-${i}`;
     await db.collection("crops").doc(cropId).set({
       farmerId: f.id,
-      cropType: i % 2 === 0 ? "wheat" : "paddy",
+      cropType: i % 2 === 0 ? "wheat" : "mustard",
       expectedQuantity: 20,
       preferredCentreId: demoCentre.id,
     });
@@ -219,8 +220,11 @@ async function seed() {
         centreId: demoCentre.id,
         slotId: demoSlotId,
         cropId,
+        cropType: i % 2 === 0 ? "wheat" : "mustard",
         tokenNumber: f.token,
         status: "arrived",
+        checkedInByStaffId: "staff-op-1",
+        createdAt: FieldValue.serverTimestamp(),
       });
 
     await db
@@ -229,13 +233,15 @@ async function seed() {
       .set({
         bookingId,
         centreId: demoCentre.id,
-        position: i + 1,
+        // Position 1 is the completed demo lot seeded below, so waiting farmers start at 2.
+        position: i + 2,
         status: "waiting",
-        estimatedWaitMinutes: (i + 1 - 1) * 8,
+        estimatedWaitMinutes: i * 8,
       });
   }
 
-  // The live demo booking — position 3, i.e. "2 people ahead of you".
+  // The live demo booking — position 4, with 2 *waiting* farmers ahead of it (position 1 is the
+  // already-completed lot, which the Live Queue doesn't count), i.e. "2 people ahead of you".
   await db
     .collection("farmers")
     .doc("farmer-demo-live")
@@ -261,25 +267,28 @@ async function seed() {
     centreId: demoCentre.id,
     slotId: demoSlotId,
     cropId: "crop-demo-live",
+    cropType: "wheat",
     tokenNumber: "KSN-1048",
     status: "arrived",
+    checkedInByStaffId: "staff-op-1",
+    createdAt: FieldValue.serverTimestamp(),
   });
 
   await db.collection("queue").doc("queue-demo-live").set({
     bookingId: "booking-demo-live",
     centreId: demoCentre.id,
-    position: 3,
+    position: 4,
     status: "waiting",
     estimatedWaitMinutes: 2 * 8,
   });
 
-  // Seed data assigns queue positions 1-3 directly rather than through checkInBooking()'s
+  // Seed data assigns queue positions 1-4 directly rather than through checkInBooking()'s
   // queuePositionCounters transaction — this counter has to be primed to match, or the next
   // *real* check-in via the app would also compute position 1 and collide with Ramesh Kumar.
   await db
     .collection("queuePositionCounters")
     .doc(`${demoCentre.id}_${today}`)
-    .set({ count: 3 });
+    .set({ count: 4 });
 
   // Not checked in yet — lets an operator test the Scan/Check-in screen against a real token.
   console.log("Seeding one not-yet-arrived booking for testing operator check-in...");
@@ -294,7 +303,7 @@ async function seed() {
   });
   await db.collection("crops").doc("crop-demo-notarrived").set({
     farmerId: "farmer-demo-notarrived",
-    cropType: "paddy",
+    cropType: "chana",
     expectedQuantity: 18,
     preferredCentreId: demoCentre.id,
   });
@@ -303,9 +312,133 @@ async function seed() {
     centreId: demoCentre.id,
     slotId: demoSlotId,
     cropId: "crop-demo-notarrived",
+    cropType: "chana",
     tokenNumber: "KSN-1049",
     status: "booked",
+    createdAt: FieldValue.serverTimestamp(),
   });
+
+  // ---------------------------------------------------------------------------------------------
+  // One fully-completed lot, so every transparency feature has something real to show on a fresh
+  // seed: a moisture deduction on the procurement record, a payment part-way through its stages,
+  // an open objection naming the operator, and the notifications + simulated SMS that went with
+  // each step. All numbers come from the same functions the app uses (computeBreakdown,
+  // notificationText), so the demo can't drift from real behaviour.
+  // ---------------------------------------------------------------------------------------------
+  console.log("Seeding a completed lot with a moisture deduction, payment stages, objection, SMS log...");
+  const doneFarmer = { id: "farmer-demo-done", name: "Mahesh Singh", mobile: "9876543097" };
+  await db.collection("farmers").doc(doneFarmer.id).set({
+    name: doneFarmer.name,
+    mobile: doneFarmer.mobile,
+    verificationStatus: "verified",
+    village: "Demo Village",
+    district: demoCentre.district,
+    state: "Haryana",
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  await db.collection("crops").doc("crop-demo-done").set({
+    farmerId: doneFarmer.id,
+    cropType: "wheat",
+    expectedQuantity: 20,
+    preferredCentreId: demoCentre.id,
+  });
+  await db.collection("bookings").doc("booking-demo-done").set({
+    farmerId: doneFarmer.id,
+    centreId: demoCentre.id,
+    slotId: demoSlotId,
+    cropId: "crop-demo-done",
+    cropType: "wheat",
+    tokenNumber: "KSN-1045",
+    status: "completed",
+    checkedInByStaffId: "staff-op-1",
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  await db.collection("queue").doc("queue-demo-done").set({
+    bookingId: "booking-demo-done",
+    centreId: demoCentre.id,
+    position: 1,
+    status: "completed",
+    estimatedWaitMinutes: 0,
+  });
+
+  // 20 quintal wheat at 13.5% moisture: 20 × ₹2,585 = ₹51,700, 1.5 points over the 12% limit
+  // at the DEMO 1%-per-point rate = ₹776 deduction -> ₹50,924.
+  const breakdown = computeBreakdown("wheat", 20, 13.5)!;
+  await db.collection("procurement").doc("procurement-demo-done").set({
+    bookingId: "booking-demo-done",
+    actualWeight: 20,
+    qualityStatus: "accepted",
+    moisturePct: breakdown.moisturePct,
+    grade: "A",
+    procurementStatus: "completed",
+    mspPerQuintal: breakdown.mspPerQuintal,
+    grossAmount: breakdown.grossAmount,
+    moistureLimitPct: breakdown.moistureLimitPct,
+    excessMoisturePct: breakdown.excessMoisturePct,
+    deductionPctPerPoint: breakdown.deductionPctPerPoint,
+    deductionRule: breakdown.deductionRule,
+    deductionAmount: breakdown.deductionAmount,
+    finalAmount: breakdown.finalAmount,
+    weighedByStaffId: "staff-op-1",
+    qualityCheckedByStaffId: "staff-op-1",
+  });
+
+  const dueDate = expectedPaymentDate(new Date());
+  await db.collection("payments").doc("payment-demo-done").set({
+    procurementId: "procurement-demo-done",
+    bookingId: "booking-demo-done",
+    farmerId: doneFarmer.id,
+    amount: breakdown.finalAmount,
+    status: "jform_generated",
+    transactionReference: null,
+    expectedPaymentDate: dueDate,
+    stageUpdatedAt: {
+      quality_accepted: FieldValue.serverTimestamp(),
+      jform_generated: FieldValue.serverTimestamp(),
+    },
+  });
+
+  await db.collection("objections").doc("booking-demo-done_quality").set({
+    bookingId: "booking-demo-done",
+    farmerId: doneFarmer.id,
+    centreId: demoCentre.id,
+    procurementId: "procurement-demo-done",
+    stage: "quality",
+    operatorStaffId: "staff-op-1",
+    reason: "quality",
+    note: "मेरे मीटर पर नमी 12.5% थी, 13.5% नहीं — दोबारा जांच की जाए।",
+    status: "open",
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  const doneMessages: { type: string; text: NotificationText }[] = [
+    { type: "call_next", text: callNextText(1) },
+    { type: "weighing_recorded", text: weighingText(20) },
+    { type: "quality_checked", text: qualityAcceptedText("A", breakdown) },
+    { type: "payment_processing", text: paymentStageText("quality_accepted", breakdown.finalAmount, dueDate) },
+    { type: "payment_jform_generated", text: paymentStageText("jform_generated", breakdown.finalAmount, dueDate) },
+  ];
+  for (const [i, m] of doneMessages.entries()) {
+    // Spaced a minute apart so both the notification list and the SMS log read in order.
+    const at = new Date(Date.now() - (doneMessages.length - i) * 60_000);
+    await db.collection("notifications").doc(`notification-demo-done-${i + 1}`).set({
+      farmerId: doneFarmer.id,
+      bookingId: "booking-demo-done",
+      type: m.type,
+      message: m.text.hi,
+      messageEn: m.text.en,
+      channel: "in_app",
+      status: i < 3 ? "read" : "unread",
+      createdAt: at,
+    });
+    await db.collection("smsLog").doc(`sms-demo-done-${i + 1}`).set({
+      mobileMasked: maskMobile(doneFarmer.mobile),
+      text: m.text.hi,
+      bookingId: "booking-demo-done",
+      status: "simulated",
+      createdAt: at,
+    });
+  }
 
   console.log("Seeding demo staff accounts (one operator per centre, PIN 1234; admin PIN 9999)...");
   const operatorPin = hashPin("1234");
@@ -335,7 +468,8 @@ async function seed() {
   });
 
   console.log(
-    "Done. Demo booking token KSN-1048 has 2 people ahead of it in the queue. " +
+    "Done. Demo booking token KSN-1048 has 2 people ahead of it in the queue; KSN-1045 is a " +
+      "completed wheat lot with a moisture deduction, an open objection and SMS log entries. " +
       "Operator logins (PIN 1234): staff-op-1 (Karnal), staff-op-2 (Panipat), staff-op-3 (Sonipat)."
   );
 }

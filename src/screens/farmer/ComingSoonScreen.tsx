@@ -12,11 +12,9 @@ import { listCropsForFarmer, type CropWithId } from "../../services/firestoreSer
 type Props = NativeStackScreenProps<RootStackParamList, "ComingSoon">;
 
 /**
- * The remaining Home tile with no real backing data yet: Payment (nothing writes to payments/
- * — payment simulation isn't part of the build order steps done so far). Shows the documented
- * empty state (Missing Details Polish sec. 2) honestly rather than faking data — except My
- * Produce, which already has real crop data from registration. Notifications now has its own
- * screen (NotificationsScreen.tsx), backed by a real listenNotifications() listener.
+ * My Produce — lists the farmer's crops from registration/booking, or the documented empty
+ * state (Missing Details Polish sec. 2). Payment and Notifications have their own screens
+ * (PaymentScreen.tsx, NotificationsScreen.tsx) backed by real listeners.
  */
 export function ComingSoonScreen({ route, navigation }: Props) {
   const { titleKey } = route.params;
@@ -27,8 +25,7 @@ export function ComingSoonScreen({ route, navigation }: Props) {
 
   useEffect(() => {
     if (!farmerId) return;
-    setLoading(true);
-    (titleKey === "homeMyProduce" ? listCropsForFarmer(farmerId) : Promise.resolve([]))
+    listCropsForFarmer(farmerId)
       .then(setCrops)
       .finally(() => setLoading(false));
   }, [farmerId, titleKey]);
@@ -85,7 +82,6 @@ function emptyStateFor(titleKey: Props["route"]["params"]["titleKey"]) {
         textKey: "emptyMyProduce" as const,
         cta: { labelKey: "homeBookSlot" as const, screen: "AddCrop" },
       };
-    case "homePayment":
     default:
       return { icon: "💰", textKey: "emptyPayment" as const, cta: null };
   }

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import React, { useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { CommonActions } from "@react-navigation/native";
 import type { OperatorStackParamList } from "../../navigation/operatorTypes";
@@ -10,9 +10,10 @@ import { OperatorHeader } from "../../components/OperatorHeader";
 import { useLanguage } from "../../context/LanguageContext";
 import { useOperator } from "../../context/OperatorContext";
 import { GRADES } from "../../data/grades";
-import { commodityUnitFor, unitLabel } from "../../data/commodities";
-import { useCommodities } from "../../hooks/useCommodities";
-import { getCentreCropCapacity, submitQualityCheck } from "../../services/firestoreService";
+import { unitLabel } from "../../data/commodities";
+import { computeBreakdown, formatRupees, mspFor } from "../../config/msp";
+import { PaymentBreakdown } from "../../components/PaymentBreakdown";
+import { submitQualityCheck } from "../../services/firestoreService";
 
 type Props = NativeStackScreenProps<OperatorStackParamList, "QualityCheck">;
 
@@ -22,11 +23,11 @@ type Props = NativeStackScreenProps<OperatorStackParamList, "QualityCheck">;
  * irreversible). Rejection: procurementStatus becomes "rejected", the farmer keeps their
  * produce with no payment obligation (Missing Details Polish sec. 8).
  *
- * The price field under Grade is the rate actually paid, in ₹ per unit of this commodity.
- * Picking a grade *pre-fills* it from whatever the admin configured for that grade at this
- * centre, but it stays fully editable — a grade letter is not a price, and the real number
- * varies by mandi and by season. Nothing here falls back to a built-in figure: with no
- * configured rate the field simply starts empty and the operator types it.
+ * The operator never types a price. The rate is the crop's official MSP from
+ * src/config/msp.ts, and the screen shows the full payment breakdown live as moisture changes —
+ * weight × MSP, moisture vs the crop's limit, the deduction and its rule, the final amount — the
+ * exact numbers the farmer will see on their phone the instant Accept is confirmed. A crop with
+ * no verified MSP can't be accepted (it can still be rejected).
  */
 export function QualityCheckScreen({ route, navigation }: Props) {
   const {
@@ -36,50 +37,33 @@ export function QualityCheckScreen({ route, navigation }: Props) {
     procurementId,
     expectedQuantity,
     actualWeight,
-    centreId,
     cropType,
   } = route.params;
   const { t, lang } = useLanguage();
-  const { staffName } = useOperator();
-  const { commodities } = useCommodities();
+  const { staffName, session } = useOperator();
   const [moisturePct, setMoisturePct] = useState(12);
+  const [moistureText, setMoistureText] = useState("12.0");
   const [grade, setGrade] = useState<string | null>(null);
-  const [priceText, setPriceText] = useState("");
-  const [priceTouched, setPriceTouched] = useState(false);
-  const [gradePrices, setGradePrices] = useState<Record<string, number>>({});
   const [rejectionReason, setRejectionReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingDecision, setPendingDecision] = useState<"accept" | "reject" | null>(null);
 
-  // One-shot read, not a listener: the rate that matters is the one in force when this lot is
-  // weighed, and an admin editing it mid-check shouldn't silently overwrite what the operator
-  // has already typed in front of the farmer.
-  useEffect(() => {
-    if (!centreId || !cropType) return;
-    getCentreCropCapacity(centreId, cropType)
-      .then((capacity) => setGradePrices(capacity?.gradePrices ?? {}))
-      .catch((e) => console.error(e));
-  }, [centreId, cropType]);
+  const quintal = unitLabel("quintal", lang);
+  const msp = mspFor(cropType);
+  const breakdown = computeBreakdown(cropType, actualWeight, moisturePct);
 
-  const unitText = unitLabel(commodityUnitFor(cropType, commodities), lang);
-  const configuredRates = GRADES.filter((g) => gradePrices[g] != null)
-    .map((g) => `${g} = ₹${gradePrices[g]}`)
-    .join(", ");
-  // Live arithmetic under the field, so the operator sees the payable amount *before* confirming
-  // rather than discovering it after the write — the same number the farmer's tracker will show.
-  const payable =
-    Number(priceText) > 0 ? Math.round(actualWeight * Number(priceText)) : null;
-
-  const onPickGrade = (g: string) => {
-    setGrade(g);
-    // Pre-fills, never locks — and only while the operator hasn't typed their own number.
-    // Overwriting a rate someone deliberately entered would be the easy way to pay the wrong
-    // figure without noticing; re-filling one this screen put there itself is just keeping the
-    // suggestion in step with the chosen grade.
-    if (priceTouched) return;
-    const configured = gradePrices[g];
-    setPriceText(configured != null ? String(configured) : "");
+  // Stepper and typed value stay in sync: the stepper rewrites the text, a valid typed value
+  // moves the stepper. Clamped to a physically meaningful 0–40% range.
+  const setMoisture = (value: number) => {
+    const clamped = Math.min(40, Math.max(0, Math.round(value * 10) / 10));
+    setMoisturePct(clamped);
+    setMoistureText(clamped.toFixed(1));
+  };
+  const onMoistureTyped = (text: string) => {
+    setMoistureText(text);
+    const n = Number(text.replace(",", "."));
+    if (text.trim() !== "" && Number.isFinite(n) && n >= 0 && n <= 40) setMoisturePct(n);
   };
 
   const goBackToQueue = () =>
@@ -91,6 +75,7 @@ export function QualityCheckScreen({ route, navigation }: Props) {
     setSubmitting(true);
     setError(null);
     try {
+      if (!session) throw new Error("No staff session");
       await submitQualityCheck({
         procurementId,
         bookingId,
@@ -98,17 +83,19 @@ export function QualityCheckScreen({ route, navigation }: Props) {
         farmerId,
         moisturePct,
         grade: grade ?? "-",
-        // On a rejection nothing is bought, so there is no rate to record — submitQualityCheck
-        // stores null in that case and never reads this number.
-        pricePerUnit: Number(priceText) || 0,
         decision,
         rejectionReason: decision === "reject" ? rejectionReason.trim() || undefined : undefined,
         actualWeight,
+        staffId: session.staffId,
       });
       goBackToQueue();
     } catch (e) {
       console.error(e);
-      setError(t("saveFailed"));
+      setError(
+        e instanceof Error && e.message === "MSP_NOT_CONFIGURED"
+          ? t("operatorMspMissing")
+          : t("saveFailed")
+      );
     } finally {
       setSubmitting(false);
     }
@@ -119,11 +106,14 @@ export function QualityCheckScreen({ route, navigation }: Props) {
       setError(t("operatorSelectGradeError"));
       return;
     }
-    // Only an acceptance needs a rate — a rejection buys nothing, so demanding a price there
-    // would just block the operator from recording a refusal.
-    const price = Number(priceText);
-    if (decision === "accept" && (!Number.isFinite(price) || price <= 0)) {
-      setError(t("operatorEnterPriceError"));
+    const typed = Number(moistureText.replace(",", "."));
+    if (moistureText.trim() === "" || !Number.isFinite(typed) || typed < 0 || typed > 40) {
+      setError(t("operatorMoistureLabel"));
+      return;
+    }
+    // Only an acceptance needs a price — a crop with no verified MSP can still be rejected.
+    if (decision === "accept" && msp == null) {
+      setError(t("operatorMspMissing"));
       return;
     }
     setError(null);
@@ -146,24 +136,34 @@ export function QualityCheckScreen({ route, navigation }: Props) {
         ]}
       />
 
-      <View style={styles.content}>
+      <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
-          <Row label={t("operatorExpectedQtyLabel")} value={`${expectedQuantity} quintals`} />
-          <Row label={t("operatorActualLabel")} value={`${actualWeight} quintals`} />
+          <Row label={t("operatorExpectedQtyLabel")} value={`${expectedQuantity} ${quintal}`} />
+          <Row label={t("operatorActualLabel")} value={`${actualWeight} ${quintal}`} />
         </View>
 
         <Text style={styles.label}>{t("operatorMoistureLabel")}</Text>
         <View style={styles.stepper}>
           <Pressable
             style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}
-            onPress={() => setMoisturePct((m) => Math.max(0, m - 0.5))}
+            onPress={() => setMoisture(moisturePct - 0.5)}
           >
             <Text style={styles.stepBtnText}>−</Text>
           </Pressable>
-          <Text style={styles.stepperValue}>{moisturePct.toFixed(1)}%</Text>
+          <View style={styles.moistureField}>
+            <TextInput
+              value={moistureText}
+              onChangeText={onMoistureTyped}
+              onBlur={() => setMoisture(moisturePct)}
+              keyboardType="decimal-pad"
+              selectTextOnFocus
+              style={styles.stepperValue}
+            />
+            <Text style={styles.percent}>%</Text>
+          </View>
           <Pressable
             style={({ pressed }) => [styles.stepBtn, pressed && styles.pressed]}
-            onPress={() => setMoisturePct((m) => m + 0.5)}
+            onPress={() => setMoisture(moisturePct + 0.5)}
           >
             <Text style={styles.stepBtnText}>+</Text>
           </Pressable>
@@ -174,7 +174,7 @@ export function QualityCheckScreen({ route, navigation }: Props) {
           {GRADES.map((g) => (
             <Pressable
               key={g}
-              onPress={() => onPickGrade(g)}
+              onPress={() => setGrade(g)}
               style={({ pressed }) => [
                 styles.gradeChip,
                 grade === g && styles.gradeChipActive,
@@ -189,27 +189,14 @@ export function QualityCheckScreen({ route, navigation }: Props) {
           ))}
         </View>
 
-        <Text style={styles.label}>{t("operatorPriceLabel").replace("{unit}", unitText)}</Text>
-        <TextInput
-          value={priceText}
-          onChangeText={(text) => {
-            setPriceTouched(true);
-            setPriceText(text);
-          }}
-          keyboardType="numeric"
-          placeholder="₹"
-          placeholderTextColor={colors.textMuted}
-          style={styles.reasonInput}
-        />
-        {configuredRates !== "" && (
-          <Text style={styles.hint}>
-            {t("operatorConfiguredPriceHint").replace("{rates}", configuredRates)}
-          </Text>
-        )}
-        {payable != null && (
-          <Text style={styles.hint}>
-            {actualWeight} × ₹{Number(priceText)} = ₹{payable}
-          </Text>
+        <Text style={styles.label}>
+          {t("operatorMspLabel").replace("{unit}", quintal)}:{" "}
+          <Text style={styles.mspValue}>{msp != null ? formatRupees(msp) : "—"}</Text>
+        </Text>
+        {breakdown ? (
+          <PaymentBreakdown breakdown={breakdown} />
+        ) : (
+          <Text style={styles.error}>{t("operatorMspMissing")}</Text>
         )}
 
         <Text style={styles.label}>{t("operatorRejectionReasonLabel")}</Text>
@@ -236,7 +223,7 @@ export function QualityCheckScreen({ route, navigation }: Props) {
           loading={submitting}
           variant="danger"
         />
-      </View>
+      </ScrollView>
 
       <ConfirmDialog
         visible={pendingDecision !== null}
@@ -296,7 +283,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   stepBtnText: { color: colors.white, fontSize: 28, fontWeight: "700", lineHeight: 30 },
-  stepperValue: { fontSize: fontSize.display, fontWeight: "800", color: colors.text, minWidth: 90, textAlign: "center" },
+  moistureField: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.sm,
+    minHeight: touchTarget,
+  },
+  stepperValue: {
+    fontSize: fontSize.display,
+    fontWeight: "800",
+    color: colors.text,
+    width: 90,
+    textAlign: "center",
+  },
+  percent: { fontSize: fontSize.display, fontWeight: "800", color: colors.text },
+  mspValue: { fontWeight: "800", color: colors.primary },
   gradeRow: { flexDirection: "row", gap: spacing.md },
   gradeChip: {
     flex: 1,

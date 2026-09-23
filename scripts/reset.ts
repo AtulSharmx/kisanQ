@@ -7,14 +7,16 @@
  * script anywhere to undo it).
  *
  * Two kinds of collections here:
- *   1. Real-usage-only (nothing in seed.ts ever writes to these): notifications, procurement,
- *      payments, identityVerification, staffSessions, tokenCounters — every document in them is
- *      wiped unconditionally.
- *   2. Seed + real-usage mixed: farmers, crops, bookings, queue, staff, slots, centres —
- *      documents are only wiped if their ID isn't one of seed.ts's fixed IDs (mirrored below;
- *      keep this list in sync with scripts/seed.ts if that script's shape ever changes).
- * slots.bookedCount and queuePositionCounters.count are fixed-ID docs that seed.ts also mutates
- * in place (not just creates) — those are restored to their seeded values rather than deleted.
+ *   1. Real-usage-only (nothing in seed.ts ever writes to these): identityVerification,
+ *      staffSessions, tokenCounters — every document in them is wiped unconditionally.
+ *   2. Seed + real-usage mixed: farmers, crops, bookings, queue, staff, slots, centres,
+ *      procurement, payments, notifications, objections, smsLog — documents are only wiped if
+ *      their ID isn't one of seed.ts's fixed IDs (mirrored below; keep this list in sync with
+ *      scripts/seed.ts if that script's shape ever changes).
+ * slots.bookedCount, queuePositionCounters.count, the seeded payment's stage and the seeded
+ * objection's status are fixed-ID docs that app usage mutates in place (an admin advancing the
+ * payment or resolving the objection during rehearsal) — those are restored to their seeded
+ * values rather than deleted.
  *
  * Uses firebase-admin (bypasses Firestore security rules) with the same serviceAccountKey.json
  * as scripts/seed.ts — local/demo use only, never run against a production project.
@@ -23,7 +25,7 @@
  * you never deleted the fixed seed docs and only want to drop rehearsal traffic)
  */
 import { initializeApp, cert } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { BUILT_IN_COMMODITIES } from "../src/data/commodities";
@@ -56,9 +58,9 @@ const CENTRE_IDS = ["centre-ksn", "centre-pnp", "centre-snp"];
 // capacity for some *other* crop during rehearsal (addCentreCropCapacity()) isn't a fixed seed
 // doc, so it gets wiped like any other real-usage document — see CROP_CAPACITY_IDS below.
 const SEEDED_CROP_CAPACITY: Record<string, Record<string, number>> = {
-  "centre-ksn": { wheat: 500, paddy: 300 },
-  "centre-pnp": { wheat: 400, paddy: 250 },
-  "centre-snp": { wheat: 300, paddy: 200 },
+  "centre-ksn": { wheat: 500, mustard: 300 },
+  "centre-pnp": { wheat: 400, mustard: 250 },
+  "centre-snp": { wheat: 300, mustard: 200 },
 };
 const CROP_CAPACITY_IDS = Object.entries(SEEDED_CROP_CAPACITY).flatMap(([centreId, byCrop]) =>
   Object.keys(byCrop).map((cropType) => `${centreId}_${cropType}`)
@@ -79,15 +81,30 @@ const FARMER_IDS = [
   "farmer-demo-2",
   "farmer-demo-live",
   "farmer-demo-notarrived",
+  "farmer-demo-done",
 ];
-const CROP_IDS = ["crop-demo-0", "crop-demo-1", "crop-demo-live", "crop-demo-notarrived"];
+const CROP_IDS = [
+  "crop-demo-0",
+  "crop-demo-1",
+  "crop-demo-live",
+  "crop-demo-notarrived",
+  "crop-demo-done",
+];
 const BOOKING_IDS = [
   "booking-demo-0",
   "booking-demo-1",
   "booking-demo-live",
   "booking-demo-notarrived",
+  "booking-demo-done",
 ];
-const QUEUE_IDS = ["queue-demo-0", "queue-demo-1", "queue-demo-live"];
+const QUEUE_IDS = ["queue-demo-0", "queue-demo-1", "queue-demo-live", "queue-demo-done"];
+// The completed demo lot (see seed.ts): its procurement record, payment, objection, and the five
+// notifications + simulated SMS that went with it.
+const PROCUREMENT_IDS = ["procurement-demo-done"];
+const PAYMENT_IDS = ["payment-demo-done"];
+const OBJECTION_IDS = ["booking-demo-done_quality"];
+const NOTIFICATION_IDS = [1, 2, 3, 4, 5].map((i) => `notification-demo-done-${i}`);
+const SMS_LOG_IDS = [1, 2, 3, 4, 5].map((i) => `sms-demo-done-${i}`);
 const STAFF_IDS = ["staff-op-1", "staff-op-2", "staff-op-3", "staff-admin-1"];
 const QUEUE_POSITION_COUNTER_IDS = [`centre-ksn_${today}`];
 
@@ -123,28 +140,29 @@ async function reset() {
     wipeExcept("queuePositionCounters", QUEUE_POSITION_COUNTER_IDS),
     wipeExcept("centreCropCapacity", CROP_CAPACITY_IDS),
     wipeExcept("commodities", COMMODITY_IDS),
+    wipeExcept("procurement", PROCUREMENT_IDS),
+    wipeExcept("payments", PAYMENT_IDS),
+    wipeExcept("objections", OBJECTION_IDS),
+    wipeExcept("notifications", NOTIFICATION_IDS),
+    wipeExcept("smsLog", SMS_LOG_IDS),
   ]);
   console.log(
     `  farmers -${mixed[0]}, crops -${mixed[1]}, bookings -${mixed[2]}, queue -${mixed[3]}, ` +
       `staff -${mixed[4]}, slots -${mixed[5]}, centres -${mixed[6]}, ` +
       `queuePositionCounters -${mixed[7]}, centreCropCapacity -${mixed[8]}, ` +
-      `commodities -${mixed[9]}`
+      `commodities -${mixed[9]}, procurement -${mixed[10]}, payments -${mixed[11]}, ` +
+      `objections -${mixed[12]}, notifications -${mixed[13]}, smsLog -${mixed[14]}`
   );
 
   console.log("Wiping real-usage-only collections entirely...");
   const usageOnly = await Promise.all([
-    wipeAll("notifications"),
-    wipeAll("procurement"),
-    wipeAll("payments"),
     wipeAll("identityVerification"),
     wipeAll("staffSessions"),
     wipeAll("tokenCounters"),
-    wipeAll("expressSlotCounters"),
   ]);
   console.log(
-    `  notifications -${usageOnly[0]}, procurement -${usageOnly[1]}, payments -${usageOnly[2]}, ` +
-      `identityVerification -${usageOnly[3]}, staffSessions -${usageOnly[4]}, ` +
-      `tokenCounters -${usageOnly[5]}, expressSlotCounters -${usageOnly[6]}`
+    `  identityVerification -${usageOnly[0]}, staffSessions -${usageOnly[1]}, ` +
+      `tokenCounters -${usageOnly[2]}`
   );
 
   console.log("Restoring seeded slot bookedCount and queue position counters...");
@@ -175,7 +193,7 @@ async function reset() {
   );
   await Promise.all(
     QUEUE_POSITION_COUNTER_IDS.map((id) =>
-      db.collection("queuePositionCounters").doc(id).set({ count: 3 })
+      db.collection("queuePositionCounters").doc(id).set({ count: 4 })
     )
   );
 
@@ -191,8 +209,21 @@ async function reset() {
     )
   );
 
+  console.log("Restoring the seeded payment stage and objection status...");
+  await db.collection("payments").doc("payment-demo-done").update({
+    status: "jform_generated",
+    transactionReference: null,
+    "stageUpdatedAt.payment_sent": FieldValue.delete(),
+    "stageUpdatedAt.credited": FieldValue.delete(),
+  }).catch(() => undefined); // not present if seed.ts hasn't been run yet
+  await db.collection("objections").doc("booking-demo-done_quality").update({
+    status: "open",
+    resolvedAt: FieldValue.delete(),
+    resolvedByStaffId: FieldValue.delete(),
+  }).catch(() => undefined); // not present if seed.ts hasn't been run yet
+
   console.log(
-    "Done. Fixed demo data (centres, slots, staff, the 4 seeded farmers/bookings) is intact " +
+    "Done. Fixed demo data (centres, slots, staff, the 5 seeded farmers/bookings and the completed demo lot) is intact " +
       "and reset to its seeded state; everything created by real app usage since the last seed " +
       "is gone."
   );

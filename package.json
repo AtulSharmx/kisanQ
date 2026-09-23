@@ -26,6 +26,8 @@
   "devDependencies": {
     "@types/react": "~19.2.2",
     "dotenv": "^17.4.2",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~57.0.2",
     "firebase-admin": "^14.4.0",
     "tsx": "^4.23.13",
     "typescript": "~6.0.3"
@@ -36,7 +38,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "seed": "tsx scripts/seed.ts",
-    "reset": "tsx scripts/reset.ts"
+    "reset": "tsx scripts/reset.ts",
+    "lint": "expo lint"
   },
   "private": true
 }

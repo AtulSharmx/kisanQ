@@ -15,18 +15,14 @@ import { useLanguage } from "../../context/LanguageContext";
 import { useOperator } from "../../context/OperatorContext";
 import {
   commodityLabelFor,
-  commodityUnitFor,
-  unitLabel,
   type CommodityOption,
 } from "../../data/commodities";
-import { GRADES } from "../../data/grades";
 import { useCommodities } from "../../hooks/useCommodities";
 import {
   addCentreCropCapacity,
   increaseCentreCropCapacity,
   listenAdminCentreBreakdown,
   listenCentreCropCapacities,
-  setCentreCropGradePrices,
   OVERLOAD_THRESHOLD_PCT,
   type CentreBreakdown,
   type CentreCropCapacityWithId,
@@ -219,7 +215,6 @@ function CapacityRow({
   };
 
   const commodity = commodities.find((c) => c.key === capacity.cropType);
-  const unit = commodityUnitFor(capacity.cropType, commodities);
 
   return (
     <View style={styles.capacityBlock}>
@@ -252,106 +247,6 @@ function CapacityRow({
         </View>
         {error && <Text style={styles.capacityError}>{error}</Text>}
       </View>
-      <GradePriceRow
-        centreId={capacity.centreId}
-        cropType={capacity.cropType}
-        gradePrices={capacity.gradePrices}
-        unitText={unitLabel(unit, lang)}
-      />
-    </View>
-  );
-}
-
-/**
- * What this centre pays, per grade, for this one commodity — one free-text ₹ field per grade in
- * src/data/grades.ts. Deliberately typed rather than picked: the whole point of the feature is
- * that a grade letter is *not* a price, so nothing here maps "A" to a hardcoded number. An empty
- * field means "no rate published for this grade" (setCentreCropGradePrices drops it rather than
- * writing 0), which is what the farmer's Centre Selection range and the operator's pre-fill both
- * treat as "operator types it free-hand."
- *
- * Saved with a merge write onto the same {centreId}_{cropType} capacity doc, so it can never
- * clobber remainingCapacityQuintals, which operators are decrementing concurrently.
- */
-function GradePriceRow({
-  centreId,
-  cropType,
-  gradePrices,
-  unitText,
-}: {
-  centreId: string;
-  cropType: string;
-  gradePrices: Record<string, number> | undefined;
-  unitText: string;
-}) {
-  const { t } = useLanguage();
-  const [draft, setDraft] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // The live doc is the source of truth; `draft` only holds grades the admin has actually typed
-  // into this session, so another operator's concurrent capacity write doesn't wipe the edit in
-  // progress and a saved price doesn't need to be echoed back into local state.
-  const valueFor = (grade: string) =>
-    draft[grade] ?? (gradePrices?.[grade] != null ? String(gradePrices[grade]) : "");
-
-  const onSave = async () => {
-    const merged: Record<string, number> = {};
-    for (const grade of GRADES) {
-      const text = valueFor(grade).trim();
-      if (text === "") continue;
-      const price = Number(text);
-      if (!Number.isFinite(price) || price <= 0) {
-        setError(t("saveFailed"));
-        return;
-      }
-      merged[grade] = price;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      await setCentreCropGradePrices(centreId, cropType, merged);
-      setDraft({});
-    } catch (e) {
-      console.error(e);
-      setError(t("saveFailed"));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <View style={styles.gradePriceBlock}>
-      <Text style={styles.addCapacityLabel}>
-        {t("adminGradePriceLabel").replace("{unit}", unitText)}
-      </Text>
-      <View style={styles.gradePriceRow}>
-        {GRADES.map((grade) => (
-          <View key={grade} style={styles.gradePriceField}>
-            <Text style={styles.gradePriceGrade}>{grade}</Text>
-            <TextInput
-              value={valueFor(grade)}
-              onChangeText={(text) => setDraft((d) => ({ ...d, [grade]: text }))}
-              keyboardType="numeric"
-              placeholder="₹"
-              placeholderTextColor={colors.textMuted}
-              style={styles.gradePriceInput}
-            />
-          </View>
-        ))}
-        <Pressable
-          onPress={onSave}
-          disabled={saving}
-          style={({ pressed }) => [
-            styles.capacityBtn,
-            saving && styles.capacityBtnDisabled,
-            pressed && !saving && styles.pressed,
-          ]}
-        >
-          <Text style={styles.capacityBtnText}>{saving ? "..." : t("adminSavePricesBtn")}</Text>
-        </Pressable>
-      </View>
-      {error && <Text style={styles.capacityError}>{error}</Text>}
     </View>
   );
 }
@@ -518,21 +413,6 @@ const styles = StyleSheet.create({
   },
   capacitySection: { gap: spacing.sm },
   capacityBlock: { gap: spacing.xs },
-  gradePriceBlock: { gap: spacing.xs, paddingLeft: spacing.md },
-  gradePriceRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: spacing.sm },
-  gradePriceField: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  gradePriceGrade: { fontSize: fontSize.body, fontWeight: "800", color: colors.text },
-  gradePriceInput: {
-    width: 80,
-    minHeight: 40,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    fontSize: fontSize.body,
-    backgroundColor: colors.surface,
-    color: colors.text,
-  },
   capacityRow: {
     flexDirection: "row",
     flexWrap: "wrap",

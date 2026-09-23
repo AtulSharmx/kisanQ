@@ -7,9 +7,12 @@ import { useLanguage } from "../../context/LanguageContext";
 import { useFarmer } from "../../context/FarmerContext";
 import { ScreenContainer } from "../../components/ScreenContainer";
 import { PrimaryButton } from "../../components/PrimaryButton";
+import { PaymentBreakdown, breakdownFromProcurement } from "../../components/PaymentBreakdown";
+import { PaymentStages, PAYMENT_STAGE_LABEL } from "../../components/PaymentStages";
+import { ObjectionPanel } from "../../components/ObjectionPanel";
+import { unitLabel } from "../../data/commodities";
 import {
-  formatPaymentDate,
-  getActiveBookingForFarmer,
+  getLatestBookingForFarmer,
   listenBooking,
   listenPaymentForProcurement,
   listenProcurementForBooking,
@@ -46,11 +49,17 @@ interface Step {
  * doc: every weighing/quality-check write the operator makes reaches this screen live.
  * The payment row reads the payments/ collection directly and deliberately does NOT approximate
  * from booking.status, which flips to "completed" the moment quality-check finishes regardless
- * of payment. It only ticks on a genuine "completed" payment; while the money is raised but
- * unsettled it shows "in process" plus the date the farmer was promised.
+ * of payment. It only ticks once the payment is "credited"; before that it shows the current
+ * payment stage, and the full stage tracker + promised date are shown below.
+ *
+ * Also shows the full payment breakdown stored on the procurement record (weight × MSP,
+ * moisture vs limit, deduction and rule, final amount) and the objection button — the farmer can
+ * dispute a weight or quality result from the same screen that shows it. Loads the farmer's
+ * latest booking *including* completed ones, since "completed" is exactly when the breakdown and
+ * payment stages matter.
  */
 export function ProcurementStatusScreen({ navigation }: Props) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { farmerId } = useFarmer();
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState<BookingWithId | null>(null);
@@ -63,7 +72,7 @@ export function ProcurementStatusScreen({ navigation }: Props) {
     let unsubProcurement: (() => void) | undefined;
     let unsubPayment: (() => void) | undefined;
 
-    getActiveBookingForFarmer(farmerId).then((b) => {
+    getLatestBookingForFarmer(farmerId).then((b) => {
       setLoading(false);
       if (!b) return;
       setBooking(b);
@@ -108,10 +117,16 @@ export function ProcurementStatusScreen({ navigation }: Props) {
         <View style={styles.center}>
           <Text style={styles.icon}>❌</Text>
           <Text style={styles.rejectedTitle}>{t("procRejected")}</Text>
+          {procurement.moisturePct != null && (
+            <Text style={styles.body}>
+              💧 {t("breakdownMoistureFound")}: {procurement.moisturePct}%
+            </Text>
+          )}
           {procurement.rejectionReason && (
             <Text style={styles.body}>{procurement.rejectionReason}</Text>
           )}
         </View>
+        <ObjectionPanel booking={booking} procurement={procurement} />
       </ScreenContainer>
     );
   }
@@ -120,10 +135,8 @@ export function ProcurementStatusScreen({ navigation }: Props) {
   const weighed = procurement?.actualWeight != null;
   const qualityChecked = !!procurement && procurement.qualityStatus !== "pending";
   const accepted = procurement?.qualityStatus === "accepted";
-  const paid = payment?.status === "completed";
-  // submitQualityCheck() raises the payment doc with status "processing" the moment the lot is
-  // accepted, so the row can say so honestly instead of sitting blank until settlement days later.
-  const paymentProcessing = payment?.status === "processing";
+  const paid = payment?.status === "credited";
+  const breakdown = breakdownFromProcurement(procurement);
 
   const steps: Step[] = [
     { key: "procStepBooked", state: "done" },
@@ -133,8 +146,8 @@ export function ProcurementStatusScreen({ navigation }: Props) {
     { key: "procStepAccepted", state: accepted ? "done" : "pending" },
     paid
       ? { key: "procStepPayment", state: "done" }
-      : paymentProcessing
-        ? { key: "procStepPaymentProcessing", state: "active" }
+      : payment
+        ? { key: PAYMENT_STAGE_LABEL[payment.status], state: "active" }
         : { key: "procStepPayment", state: "pending" },
   ];
 
@@ -155,26 +168,28 @@ export function ProcurementStatusScreen({ navigation }: Props) {
       </View>
 
       {weighed && procurement?.actualWeight != null && (
-        <Text style={styles.detail}>आपका वज़न दर्ज हुआ: {procurement.actualWeight} किलो।</Text>
+        <Text style={styles.detail}>
+          {t("weighingRecordedDetail")
+            .replace("{weight}", String(procurement.actualWeight))
+            .replace("{unit}", unitLabel("quintal", lang))}
+        </Text>
       )}
       {qualityChecked && procurement?.grade && (
-        <Text style={styles.detail}>गुणवत्ता जांच पूरी — ग्रेड: {procurement.grade}।</Text>
-      )}
-      {accepted && procurement?.pricePerUnit != null && procurement.actualWeight != null && (
         <Text style={styles.detail}>
-          {t("procPriceDetail")
-            .replace("{rate}", String(procurement.pricePerUnit))
-            .replace("{amount}", String(Math.round(procurement.actualWeight * procurement.pricePerUnit)))}
+          {t("qualityGradeDetail").replace("{grade}", procurement.grade)}
         </Text>
       )}
-      {paymentProcessing && payment?.expectedPaymentDate && (
-        <Text style={styles.detail}>
-          {t("procExpectedPaymentDate").replace(
-            "{date}",
-            formatPaymentDate(payment.expectedPaymentDate)
-          )}
-        </Text>
+      {accepted && breakdown && (
+        <View style={styles.section}>
+          <PaymentBreakdown breakdown={breakdown} />
+        </View>
       )}
+      {payment && (
+        <View style={styles.section}>
+          <PaymentStages payment={payment} />
+        </View>
+      )}
+      {weighed && procurement && <ObjectionPanel booking={booking} procurement={procurement} />}
     </ScreenContainer>
   );
 }
@@ -199,5 +214,6 @@ const styles = StyleSheet.create({
   stepLabel: { fontSize: fontSize.label, fontWeight: "700", color: colors.text },
   stepLabelPending: { color: colors.textMuted, fontWeight: "500" },
   detail: { fontSize: fontSize.body, color: colors.text, marginTop: spacing.lg },
+  section: { marginTop: spacing.lg },
   rejectedTitle: { fontSize: fontSize.header, fontWeight: "800", color: colors.error },
 });

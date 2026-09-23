@@ -15,14 +15,17 @@ import {
   type BookingWithId,
 } from "../../services/firestoreService";
 import type { Crop, Farmer } from "../../types/firestore";
+import { unitLabel } from "../../data/commodities";
 
 type Props = NativeStackScreenProps<OperatorStackParamList, "Weighing">;
 
 /** Weighing screen — UI/UX spec Operator screen 4: expected vs actual, numeric input. */
 export function WeighingScreen({ route, navigation }: Props) {
   const { bookingId, queueId, farmerId } = route.params;
-  const { t } = useLanguage();
-  const { staffName } = useOperator();
+  const { t, lang } = useLanguage();
+  const { staffName, session } = useOperator();
+  // Every weight in the app is in quintals — MSP is quoted per quintal.
+  const quintal = unitLabel("quintal", lang);
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState<BookingWithId | null>(null);
   const [crop, setCrop] = useState<Crop | null>(null);
@@ -45,14 +48,19 @@ export function WeighingScreen({ route, navigation }: Props) {
 
   const onConfirm = async () => {
     const weight = Number(actualWeight);
-    if (!weight || weight <= 0) {
+    if (!weight || weight <= 0 || !session) {
       setError(t("operatorEnterValidWeight"));
       return;
     }
     setSaving(true);
     setError(null);
     try {
-      const { procurementId } = await recordWeighing({ bookingId, farmerId, actualWeight: weight });
+      const { procurementId } = await recordWeighing({
+        bookingId,
+        farmerId,
+        actualWeight: weight,
+        staffId: session.staffId,
+      });
       navigation.navigate("QualityCheck", {
         bookingId,
         queueId,
@@ -102,11 +110,11 @@ export function WeighingScreen({ route, navigation }: Props) {
           <Row label={t("operatorCropLabel")} value={crop?.cropType ?? "-"} />
           <Row
             label={t("operatorExpectedQtyLabel")}
-            value={crop ? `${crop.expectedQuantity} quintals` : "-"}
+            value={crop ? `${crop.expectedQuantity} ${quintal}` : "-"}
           />
         </View>
 
-        <Text style={styles.label}>{t("operatorActualLabel")} (quintals)</Text>
+        <Text style={styles.label}>{t("operatorActualLabel")} ({quintal})</Text>
         <TextInput
           value={actualWeight}
           onChangeText={setActualWeight}

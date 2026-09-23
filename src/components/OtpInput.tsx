@@ -10,7 +10,7 @@ interface Props {
 
 /** Large 6-box OTP input, auto-advancing (UI/UX spec section 2). */
 export function OtpInput({ length = 6, value, onChange }: Props) {
-  const inputs = useRef<Array<TextInput | null>>([]);
+  const inputs = useRef<(TextInput | null)[]>([]);
   const digits = value.padEnd(length, " ").split("").slice(0, length);
 
   const setDigit = (index: number, char: string) => {

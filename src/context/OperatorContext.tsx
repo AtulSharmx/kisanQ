@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged, signInAnonymously } from "firebase/auth";
 import { deleteDoc, doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
@@ -54,7 +54,7 @@ export function OperatorProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe;
   }, []);
 
-  const login = async (staffId: string, pin: string) => {
+  const login = useCallback(async (staffId: string, pin: string) => {
     if (!uid) return;
     setLoggingIn(true);
     setLoginError(null);
@@ -84,18 +84,18 @@ export function OperatorProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoggingIn(false);
     }
-  };
+  }, [uid, t]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     if (!uid) return;
     await deleteDoc(doc(db, COLLECTIONS.staffSessions, uid)).catch(() => {});
     setSession(null);
     setStaffName(null);
-  };
+  }, [uid]);
 
   const value = useMemo(
     () => ({ session, staffName, initializing, loginError, loggingIn, login, logout }),
-    [session, staffName, initializing, loginError, loggingIn]
+    [session, staffName, initializing, loginError, loggingIn, login, logout]
   );
 
   return <OperatorContext.Provider value={value}>{children}</OperatorContext.Provider>;

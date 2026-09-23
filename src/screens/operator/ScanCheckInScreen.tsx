@@ -17,6 +17,7 @@ import {
   type BookingWithId,
 } from "../../services/firestoreService";
 import type { Crop, Farmer, Slot } from "../../types/firestore";
+import { unitLabel } from "../../data/commodities";
 
 type Props = NativeStackScreenProps<OperatorStackParamList, "ScanCheckIn">;
 
@@ -33,7 +34,7 @@ interface Candidate {
  * "can't scan?" link).
  */
 export function ScanCheckInScreen({ navigation }: Props) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { session, staffName, logout } = useOperator();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = useState(false);
@@ -170,7 +171,7 @@ export function ScanCheckInScreen({ navigation }: Props) {
             <Row label={t("operatorCropLabel")} value={candidate.crop.cropType} />
             <Row
               label={t("operatorExpectedQtyLabel")}
-              value={`${candidate.crop.expectedQuantity} quintals`}
+              value={`${candidate.crop.expectedQuantity} ${unitLabel("quintal", lang)}`}
             />
             {candidate.slot && (
               <Row

@@ -66,6 +66,24 @@ export function AdminOverviewScreen({ navigation }: Props) {
             <Text style={styles.headerChipText}>🗺️ {t("adminDrilldownLink")}</Text>
           </Pressable>
           <Pressable
+            onPress={() => navigation.navigate("AdminPayments")}
+            style={({ pressed }) => [styles.headerChip, pressed && styles.pressed]}
+          >
+            <Text style={styles.headerChipText}>💰 {t("adminPaymentsLink")}</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => navigation.navigate("AdminObjections")}
+            style={({ pressed }) => [styles.headerChip, pressed && styles.pressed]}
+          >
+            <Text style={styles.headerChipText}>✋ {t("adminObjectionsLink")}</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => navigation.navigate("AdminSmsLog")}
+            style={({ pressed }) => [styles.headerChip, pressed && styles.pressed]}
+          >
+            <Text style={styles.headerChipText}>📩 {t("adminSmsLogLink")}</Text>
+          </Pressable>
+          <Pressable
             onPress={() => navigation.navigate("AdminSettings")}
             style={({ pressed }) => [styles.headerChip, pressed && styles.pressed]}
           >

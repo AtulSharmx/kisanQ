@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import type { RootStackParamList } from "../../navigation/types";
 import { colors, fontSize, radius, shadow, spacing } from "../../theme";
 import { useLanguage } from "../../context/LanguageContext";
 import { useFarmer } from "../../context/FarmerContext";
@@ -12,8 +10,6 @@ import {
 } from "../../services/firestoreService";
 import type { NotificationType } from "../../types/firestore";
 
-type Props = NativeStackScreenProps<RootStackParamList, "Notifications">;
-
 // Real-world metaphor icons per notification type (CLAUDE.md design principle), not text alone.
 const ICONS: Record<NotificationType, string> = {
   day_before_reminder: "📅",
@@ -23,6 +19,8 @@ const ICONS: Record<NotificationType, string> = {
   weighing_recorded: "⚖️",
   quality_checked: "✅",
   payment_processing: "💰",
+  payment_jform_generated: "📄",
+  payment_sent: "🏦",
   payment_completed: "💰",
 };
 
@@ -41,8 +39,8 @@ function formatTime(notification: NotificationWithId): string {
  * operator makes now actually reaches this screen, not just a Firestore document nobody reads
  * (the collection was previously write-only from the farmer's side).
  */
-export function NotificationsScreen({}: Props) {
-  const { t } = useLanguage();
+export function NotificationsScreen() {
+  const { t, lang } = useLanguage();
   const { farmerId } = useFarmer();
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<NotificationWithId[]>([]);
@@ -86,7 +84,9 @@ export function NotificationsScreen({}: Props) {
           <Text style={styles.icon}>{ICONS[n.type] ?? "🔔"}</Text>
           <View style={styles.textWrap}>
             <Text style={[styles.message, n.status === "unread" && styles.messageUnread]}>
-              {n.message}
+              {/* Hindi `message` is the default (and the SMS text); English UI shows messageEn when the
+                  notification has one. Other languages fall back to Hindi. */}
+              {lang === "en" && n.messageEn ? n.messageEn : n.message}
             </Text>
             <Text style={styles.time}>{formatTime(n)}</Text>
           </View>

@@ -31,7 +31,8 @@ rules_version = '2';
 // collection that the app needs to *query* — not just fetch single documents from — has its
 // read rule relaxed to "any signed-in device" below, with a comment at each spot. Writes and
 // single-document reads keep the real get()-based role checks; only list-query reads on
-// bookings/, crops/, queue/, procurement/, and payments/ are affected. This is a real,
+// bookings/, crops/, queue/, procurement/, payments/ and notifications/ are affected
+// (objections/ avoids it with deterministic doc ids — see its match block). This is a real,
 // deliberate gap for the prototype, not an oversight — the honest fix is a Cloud Function
 // minting real custom claims.
 service cloud.firestore {
@@ -157,13 +158,6 @@ service cloud.firestore {
       allow read, write: if isSignedIn();
     }
 
-    match /expressSlotCounters/{counterId} {
-      // Same pattern as tokenCounters — enforcing the EXPRESS_QUOTA_PER_DAY cap happens in
-      // createBooking()'s transaction logic (read-then-conditionally-write), not in the rule
-      // itself; the rule only needs to let that read/write happen at all.
-      allow read, write: if isSignedIn();
-    }
-
     match /bookings/{bookingId} {
       // Relaxed to isSignedIn() for read — see the get()-in-list-queries note above.
       // getActiveBookingForFarmer() and the operator's findCheckInCandidate() both query this
@@ -209,12 +203,55 @@ service cloud.firestore {
       allow read: if isSignedIn();
       // Create is open to any staff, not just admin: submitQualityCheck() raises the
       // *simulated* payment doc inside the operator's own quality-check transaction, so the
-      // amount reaches the farmer's tracker at the same instant as the grade and rate. No real
-      // money moves (CLAUDE.md rule 6) — the doc is written with status "processing".
-      // Update/delete stay admin-only so an operator can't retroactively rewrite an amount
-      // after the farmer has seen it, which is exactly the fraud the tracker exists to expose.
-      allow create: if isStaff();
+      // amount reaches the farmer's tracker at the same instant as the grade and breakdown. No
+      // real money moves (CLAUDE.md rule 6) — the doc is always created at the first stage,
+      // "quality_accepted". Update/delete stay admin-only: only an admin moves a payment through
+      // J-Form generated -> Payment sent -> Credited (advancePaymentStage()), and an operator
+      // can't retroactively rewrite an amount after the farmer has seen it, which is exactly
+      // the fraud the tracker exists to expose.
+      allow create: if isStaff() && request.resource.data.status == "quality_accepted";
       allow update, delete: if isAdmin();
+    }
+
+    match /objections/{objectionId} {
+      // A farmer disputing a recorded weight or quality/moisture result. Doc id is
+      // {bookingId}_{stage} (one objection per booking per stage), so the farmer reads their own
+      // objection with single-document gets — never a list query — which is what lets this read
+      // rule stay owner-scoped without hitting the get()-in-list-queries limitation above.
+      // `resource == null` lets the farmer's listener on a not-yet-created objection succeed
+      // (it reveals nothing); the owner check short-circuits before isStaff() is evaluated.
+      allow get: if isSignedIn()
+        && (resource == null || resource.data.farmerId == request.auth.uid || isStaff());
+      // Unfiltered list for the Admin Objections screen — isStaff() doesn't depend on
+      // resource.data, so it's securable as a list rule (see CLAUDE.md's admin-query note).
+      allow list: if isStaff();
+      // Farmer creates only for their own booking (checked against the real booking doc, a
+      // single-document get() — fine in a write rule), only as "open", only under the
+      // deterministic id. A second objection on the same stage would be an update, which only
+      // an admin may do — so a farmer can't overwrite or re-open anything.
+      allow create: if isSignedIn()
+        && request.resource.data.farmerId == request.auth.uid
+        && get(/databases/$(database)/documents/bookings/$(request.resource.data.bookingId)).data.farmerId == request.auth.uid
+        && request.resource.data.centreId == bookingCentreId(request.resource.data.bookingId)
+        && request.resource.data.stage in ["weighing", "quality"]
+        && objectionId == request.resource.data.bookingId + "_" + request.resource.data.stage
+        && request.resource.data.reason in ["weight", "quality", "other"]
+        && request.resource.data.status == "open";
+      // Only an admin changes status (open -> resolved), and nothing else about the objection.
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "resolvedAt", "resolvedByStaffId"])
+        && request.resource.data.status == "resolved";
+      allow delete: if false;
+    }
+
+    match /smsLog/{smsId} {
+      // Simulated SMS audit trail (src/services/sms.ts). Every farmer notification is raised by
+      // a staff action, so only staff write here; only an admin reads it (Admin SMS Log screen —
+      // an unfiltered list, securable since isAdmin() doesn't depend on resource.data). Entries
+      // are append-only: status must be "simulated" until a real gateway is integrated.
+      allow create: if isStaff() && request.resource.data.status == "simulated";
+      allow read: if isAdmin();
+      allow update, delete: if false;
     }
 
     match /notifications/{notificationId} {

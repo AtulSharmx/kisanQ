@@ -97,4 +97,23 @@ export const CROPS: CropOption[] = [
       ta: "பாசிப்பயறு", kn: "ಹೆಸರುಕಾಳು", ml: "ചെറുപയർ", or: "ମୁଗ", ur: "مونگ",
     },
   },
+  // Barley and lentil were added with the RMS 2026-27 MSP config (src/config/msp.ts) — both are
+  // Rabi MSP crops with a verified price. No bundled photo yet, so CropThumb shows the emoji.
+  {
+    key: "barley",
+    icon: "🌾",
+    labels: {
+      hi: "जौ", en: "Barley", pa: "ਜੌਂ", bn: "যব", mr: "जव", gu: "જવ", te: "బార్లీ",
+      ta: "வாற்கோதுமை", kn: "ಬಾರ್ಲಿ", ml: "ബാർലി", or: "ଯବ", ur: "جو",
+    },
+  },
+  {
+    key: "masur",
+    icon: "🫘",
+    labels: {
+      hi: "मसूर", en: "Lentil (Masur)", pa: "ਮਸਰ", bn: "মসুর", mr: "मसूर", gu: "મસૂર",
+      te: "మసూర్ పప్పు", ta: "மசூர் பருப்பு", kn: "ಮಸೂರ್ ಬೇಳೆ", ml: "മസൂർ പരിപ്പ്", or: "ମସୁର",
+      ur: "مسور",
+    },
+  },
 ];

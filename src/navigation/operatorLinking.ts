@@ -31,6 +31,9 @@ const ADMIN_PATHS = {
   AdminOverview: "admin",
   AdminDrilldown: "admin/centres",
   AdminSettings: "admin/settings",
+  AdminPayments: "admin/payments",
+  AdminObjections: "admin/objections",
+  AdminSmsLog: "admin/sms-log",
 } as const;
 
 const OPERATOR_PATHS = {
@@ -64,7 +67,7 @@ export function operatorLinking(role: StaffRole | null): LinkingOptions<Operator
     prefixes: [typeof window !== "undefined" ? window.location.origin : "/"],
     config: {
       // Cast: each per-role map is a partial view of the param list (that's the whole point —
-      // see the comment above), which the config type can't express on its own.
+      // see the comment above), which the config type has no way to describe on its own.
       screens: pathsForRole(role) as NonNullable<
         LinkingOptions<OperatorStackParamList>["config"]
       >["screens"],

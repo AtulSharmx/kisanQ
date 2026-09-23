@@ -15,6 +15,7 @@ import { SlotBookingScreen } from "../screens/farmer/SlotBookingScreen";
 import { TokenScreen } from "../screens/farmer/TokenScreen";
 import { LiveQueueScreen } from "../screens/farmer/LiveQueueScreen";
 import { ProcurementStatusScreen } from "../screens/farmer/ProcurementStatusScreen";
+import { PaymentScreen } from "../screens/farmer/PaymentScreen";
 import { NotificationsScreen } from "../screens/farmer/NotificationsScreen";
 import { SettingsScreen } from "../screens/farmer/SettingsScreen";
 import { ComingSoonScreen } from "../screens/farmer/ComingSoonScreen";
@@ -48,6 +49,7 @@ export function AppNavigator({ initialRouteName }: { initialRouteName: "Splash" 
       <Stack.Screen name="Token" component={TokenScreen} />
       <Stack.Screen name="LiveQueue" component={LiveQueueScreen} />
       <Stack.Screen name="ProcurementStatus" component={ProcurementStatusScreen} />
+      <Stack.Screen name="Payment" component={PaymentScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="ComingSoon" component={ComingSoonScreen} />

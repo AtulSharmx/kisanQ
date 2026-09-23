@@ -147,7 +147,11 @@ plugins, etc.) rather than relying on older training knowledge.
   and a lower `position`), not the `estimatedWaitMinutes` field frozen at check-in. The
   Procurement Status "Payment" tick reads the `payments` collection directly rather than
   approximating from `booking.status` — that field flips to `"completed"` the moment
-  quality-check finishes (accepted *or* rejected), which is not the same thing as paid.
+  quality-check finishes (accepted *or* rejected), which is not the same thing as paid. It only
+  ticks at the last payment stage, `"credited"`. Procurement Status loads the farmer's booking via
+  `getLatestBookingForFarmer()` (active first, else most recent *completed*, by
+  `booking.createdAt`) — `getActiveBookingForFarmer()` excludes completed bookings, which made the
+  screen go empty exactly when the payment breakdown mattered.
 - **`react-native-web`'s `Alert.alert` is a complete no-op stub** (confirmed by reading
   `node_modules/react-native-web/src/exports/Alert/index.js` — it's a one-line empty function).
   It works fine on native, but since the Operator only ever runs on web, any confirm-before-
@@ -192,3 +196,48 @@ plugins, etc.) rather than relying on older training knowledge.
   fixed: two action-link `Pressable`s (OTP fingerprint fallback, Profile Confirm "wrong info?")
   had no `minHeight`, so their tap target was just the text's bounding box, under the ~50dp
   minimum — give any bare text-link `Pressable` an explicit `minHeight: touchTarget`.
+- **Express Slot was removed** (SIH26032 review): no paid/priority queue of any kind — queue order
+  is plain arrival `position` everywhere (farmer Live Queue, operator Live Queue Management). Don't
+  reintroduce `isExpress`-style fields or counters.
+- **Pricing = MSP, from one file.** [`src/config/msp.ts`](src/config/msp.ts) holds the official
+  RMS 2026-27 MSP per crop (wheat ₹2,585, gram/`chana` ₹5,875, rapeseed & mustard ₹6,200, barley
+  ₹2,150, lentil/`masur` ₹7,000 — per quintal), the moisture limit per crop (only wheat's 12% is
+  known) and the per-point deduction rate, which is a **DEMO value** (1% of MSP value per 1% excess
+  moisture). `final = weight (quintals) × MSP − deduction`, computed by `computeBreakdown()`. Never
+  put a price anywhere else, and never guess an MSP: crops without one (paddy, bajra, jowar, makka,
+  kapas, ganna, moong, admin-added commodities) return `null`, show no MSP line, and the operator
+  can't Accept them (`MSP_NOT_CONFIGURED`). The old per-centre `gradePrices` feature is gone —
+  grade is recorded but doesn't change the price.
+- **The procurement record is the receipt.** `submitQualityCheck()` stores every breakdown field
+  (`mspPerQuintal`, `grossAmount`, `moisturePct`, `moistureLimitPct`, `excessMoisturePct`,
+  `deductionPctPerPoint`, `deductionRule`, `deductionAmount`, `finalAmount`) plus
+  `weighedByStaffId`/`qualityCheckedByStaffId`. Farmer screens render the stored values
+  (`breakdownFromProcurement()`), never recompute from config — a config change must not rewrite
+  what the farmer was told. Every weight is in quintals, in every language and notification.
+- **Payment stages:** `payments.status` is `quality_accepted → jform_generated → payment_sent →
+  credited` (`PAYMENT_STAGES` in `src/types/firestore.ts`). Created at `quality_accepted` by the
+  operator's quality-check transaction (rules enforce that), moved forward one stage at a time only
+  by an admin via `advancePaymentStage()` (Admin → Payments). Payment docs carry `bookingId` and
+  `farmerId` so the farmer's Payment screen (`listenPaymentsForFarmer()`) and admin can find them.
+- **Notifications are bilingual and every one is also an SMS.** `message` is Hindi (also the SMS
+  text), `messageEn` English — the copy lives in
+  [`src/services/notificationText.ts`](src/services/notificationText.ts) (firebase-free, so
+  `scripts/seed.ts` uses the same wording). In-app notifications are written inside the
+  transaction; `smsFarmer()` sends the SMS *after* it commits (best-effort — an SMS failure never
+  fails the operator's action). `sendSms()` in [`src/services/sms.ts`](src/services/sms.ts) only
+  writes a masked-number, status `"simulated"` entry to `smsLog` — it's the single function to
+  change to plug in a real gateway (MSG91 etc., ideally via a Cloud Function). Rules: only staff
+  create `smsLog`, only admin reads it. Any new farmer notification must go through
+  `buildNotification()` + `smsFarmer()`.
+- **Objections** (`objections/{bookingId}_{weighing|quality}`): deterministic ids so the farmer
+  reads their own objection with single-document listeners (`listenObjectionsForBooking()`), which
+  keeps the read rule owner-scoped despite the get()-in-list-queries limitation above — admin uses
+  an unfiltered list. Create is farmer-only for their own booking (checked with `get()` on the
+  booking — fine in a write rule), status `"open"`; only admin may update, and only `status` →
+  `"resolved"`. `operatorStaffId` comes from the procurement record's staff fields.
+- **Languages:** all 12 (`hi en pa bn mr gu te ta kn ml or ur`) have a complete translation of
+  every UI string — `Lang` is a union, so TypeScript refuses a string missing any language. New
+  strings need all 12; Hindi/English are the reviewed copy, the other ten should get a native
+  speaker's review.
+- **Lint:** `npm run lint` (Expo's ESLint config, `eslint.config.js`; `.claude/` worktrees are
+  ignored). Keep it at zero errors and zero warnings, alongside `npx tsc --noEmit`.

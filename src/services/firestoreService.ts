@@ -16,11 +16,12 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
+  updateDoc,
   where,
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { COLLECTIONS } from "../types/firestore";
+import { COLLECTIONS, PAYMENT_STAGES } from "../types/firestore";
 import type {
   AppNotification,
   Booking,
@@ -30,55 +31,38 @@ import type {
   Crop,
   Farmer,
   IdentityVerification,
+  NotificationType,
+  Objection,
+  ObjectionReason,
+  ObjectionStage,
   Payment,
+  PaymentStage,
   Procurement,
   QueueEntry,
   Slot,
+  SmsLogEntry,
+  Staff,
 } from "../types/firestore";
+import { computeBreakdown } from "../config/msp";
+import { sendSms } from "./sms";
+import {
+  callNextText,
+  paymentStageText,
+  qualityAcceptedText,
+  qualityRejectedText,
+  weighingText,
+  type NotificationText,
+} from "./notificationText";
+import { expectedPaymentDate } from "../utils/paymentDates";
+
+export {
+  PAYMENT_SETTLEMENT_DAYS,
+  expectedPaymentDate,
+  formatPaymentDate,
+} from "../utils/paymentDates";
 
 /** Average processing time per farmer, for wait estimates — see Missing Details Polish sec. 6. */
 export const AVERAGE_PROCESSING_MINUTES = 8;
-
-/**
- * Express (Tatkal-style) priority booking — a fixed, transparent, officially-priced, CAPPED
- * quota, not a live auction. Modelled on IRCTC/Passport Seva Tatkal: a small fixed number of
- * slots at a fixed (escalating-per-slot) price, and once they're gone nobody can buy their way
- * in no matter how much they'd pay — the cap is what stops it from turning into "everyone just
- * pays a bit more than the last person," which is the real fairness risk with an open-ended
- * pay-to-skip model. Deliberately small numbers: this is a demonstration of the *mechanism*,
- * not a revenue feature, and the price is a symbolic official fee, not a market price.
- */
-export const EXPRESS_QUOTA_PER_DAY = 2;
-export const EXPRESS_PRICES = [20, 40]; // ₹, one entry per rank (1st slot cheaper than 2nd)
-
-/** Sort key for combined queue ordering: all Express entries before all regular entries,
- * ordered by arrival (position) within each group. Used everywhere "who's ahead of whom" is
- * computed, instead of comparing raw `position` — Express deliberately does not touch or
- * renumber anyone else's position, it only changes how the existing positions are compared. */
-export function queueSortKey(e: { isExpress?: boolean; position: number }): [number, number] {
-  return [e.isExpress ? 0 : 1, e.position];
-}
-
-function compareQueueSortKey(a: [number, number], b: [number, number]): number {
-  return a[0] - b[0] || a[1] - b[1];
-}
-
-/** Comparator for Array.sort() — Express entries first, then by position — used by the
- * Operator's Live Queue Management screen so its display order matches what farmers actually
- * see reflected in isAheadInQueue()/queueSortKey() below. */
-export function compareQueueEntries(
-  a: { isExpress?: boolean; position: number },
-  b: { isExpress?: boolean; position: number }
-): number {
-  return compareQueueSortKey(queueSortKey(a), queueSortKey(b));
-}
-
-export function isAheadInQueue(
-  candidate: { isExpress?: boolean; position: number },
-  of: { isExpress?: boolean; position: number }
-): boolean {
-  return compareQueueSortKey(queueSortKey(candidate), queueSortKey(of)) < 0;
-}
 
 export interface RegisterFarmerInput {
   farmerId: string; // the signed-in Firebase Auth uid — see src/lib/firebase.ts
@@ -123,6 +107,41 @@ export async function registerFarmer(input: RegisterFarmerInput): Promise<string
 export async function getFarmer(farmerId: string): Promise<Farmer | null> {
   const snap = await getDoc(doc(db, COLLECTIONS.farmers, farmerId));
   return snap.exists() ? (snap.data() as Farmer) : null;
+}
+
+/** A farmer notification document, bilingual (Hindi `message`, English `messageEn`). */
+function buildNotification(
+  farmerId: string,
+  bookingId: string,
+  type: NotificationType,
+  text: NotificationText
+): AppNotification {
+  return {
+    farmerId,
+    bookingId,
+    type,
+    message: text.hi,
+    messageEn: text.en,
+    channel: "in_app",
+    status: "unread",
+    createdAt: serverTimestamp() as unknown as AppNotification["createdAt"],
+  };
+}
+
+/**
+ * The SMS half of every farmer notification. Called *after* the transaction that wrote the in-app
+ * notification commits — a gateway call can't take part in a Firestore transaction, and an SMS
+ * must never go out for a write that then rolled back. Best-effort: a failed SMS is logged, never
+ * allowed to fail the operator's/admin's action (the in-app notification already landed).
+ */
+async function smsFarmer(farmerId: string, bookingId: string, texts: NotificationText[]) {
+  try {
+    const farmer = await getFarmer(farmerId);
+    if (!farmer?.mobile) return;
+    for (const text of texts) await sendSms(farmer.mobile, text.hi, bookingId);
+  } catch (e) {
+    console.error("SMS log write failed", e);
+  }
 }
 
 export interface AddCropInput {
@@ -305,20 +324,6 @@ export async function hasAvailableSlotToday(centreId: string): Promise<boolean> 
   return slots.some((s) => s.bookedCount < s.capacity);
 }
 
-/** Express availability for a centre on a given date — see EXPRESS_QUOTA_PER_DAY above. */
-export async function getExpressAvailability(
-  centreId: string,
-  date: string
-): Promise<{ available: boolean; nextRank: number; price: number }> {
-  const snap = await getDoc(doc(db, COLLECTIONS.expressSlotCounters, `${centreId}_${date}`));
-  const count = snap.exists() ? (snap.data().count as number) : 0;
-  return {
-    available: count < EXPRESS_QUOTA_PER_DAY,
-    nextRank: count + 1,
-    price: EXPRESS_PRICES[count] ?? EXPRESS_PRICES[EXPRESS_PRICES.length - 1],
-  };
-}
-
 export interface CreateBookingInput {
   farmerId: string;
   centreId: string;
@@ -332,25 +337,19 @@ export interface CreateBookingInput {
    * *overshoot* the commodity's remaining capacity rather than only one that arrives after it
    * already hit zero. Omitted = fall back to the zero-check alone. */
   expectedQuantity?: number;
-  /** Opt into an Express (Tatkal-style) slot, if one of the EXPRESS_QUOTA_PER_DAY is still
-   * available for this slot's date — see getExpressAvailability(). */
-  wantsExpress?: boolean;
 }
 
 export interface CreateBookingResult {
   bookingId: string;
   tokenNumber: string;
-  isExpress: boolean;
-  expressFeePaid?: number;
 }
 
 /**
  * Atomically: bumps the slot's bookedCount, allocates the next daily sequential token number
  * for the centre (format `[Centre code]-[4-digit sequential]`, resets daily — Missing Details
- * Polish sec. 4), optionally claims one of the day's capped Express slots, and creates the
- * bookings/{id} doc with status "booked".
+ * Polish sec. 4), and creates the bookings/{id} doc with status "booked".
  *
- * The token/Express counters are keyed by the *slot's own* date, not the date this function
+ * The token counter is keyed by the *slot's own* date, not the date this function
  * happens to run on — advance booking (booking a future day's slot) means those can differ, and
  * getting this wrong would silently mix today's token sequence with a future day's.
  */
@@ -396,7 +395,7 @@ export async function createBooking(
       if (slot.date === today) {
         const remaining = capacity.remainingCapacityQuintals;
         if (remaining <= 0) {
-          // Stable error code, same pattern as SLOT_FULL/EXPRESS_SOLD_OUT below — the screen maps
+          // Stable error code, same pattern as SLOT_FULL below — the screen maps
           // this to a translated message rather than showing raw English.
           throw new Error("CENTRE_CAPACITY_FULL");
         }
@@ -422,36 +421,8 @@ export async function createBooking(
     const nextSeq = (counterSnap.exists() ? (counterSnap.data().count as number) : 0) + 1;
     const token = `${centre.code}-${String(nextSeq).padStart(4, "0")}`;
 
-    // Express eligibility is read here (alongside the other reads) but only *written* below,
-    // once every read this transaction needs has happened — Firestore transactions require all
-    // reads before any writes.
-    let expressCounterRef: ReturnType<typeof doc> | undefined;
-    let expressCount = 0;
-    if (input.wantsExpress) {
-      expressCounterRef = doc(
-        db,
-        COLLECTIONS.expressSlotCounters,
-        `${input.centreId}_${slot.date}`
-      );
-      const expressSnap = await tx.get(expressCounterRef);
-      expressCount = expressSnap.exists() ? (expressSnap.data().count as number) : 0;
-      if (expressCount >= EXPRESS_QUOTA_PER_DAY) {
-        // Stable error code, same pattern as SLOT_FULL — the screen maps this to a translated
-        // "sold out" message rather than showing raw English.
-        throw new Error("EXPRESS_SOLD_OUT");
-      }
-    }
-
     tx.set(counterRef, { count: nextSeq });
     tx.update(slotRef, { bookedCount: slot.bookedCount + 1 });
-
-    let isExpress = false;
-    let expressFeePaid: number | undefined;
-    if (expressCounterRef) {
-      tx.set(expressCounterRef, { count: expressCount + 1 });
-      isExpress = true;
-      expressFeePaid = EXPRESS_PRICES[expressCount] ?? EXPRESS_PRICES[EXPRESS_PRICES.length - 1];
-    }
 
     const booking: Booking = {
       farmerId: input.farmerId,
@@ -464,19 +435,14 @@ export async function createBooking(
       cropType: input.cropType,
       tokenNumber: token,
       status: "booked",
-      ...(isExpress ? { isExpress, expressFeePaid } : {}),
+      createdAt: serverTimestamp() as unknown as NonNullable<Booking["createdAt"]>,
     };
     tx.set(bookingRef, booking);
 
-    return { token, isExpress, expressFeePaid };
+    return { token };
   });
 
-  return {
-    bookingId: bookingRef.id,
-    tokenNumber: result.token,
-    isExpress: result.isExpress,
-    expressFeePaid: result.expressFeePaid,
-  };
+  return { bookingId: bookingRef.id, tokenNumber: result.token };
 }
 
 export interface BookingWithId extends Booking {
@@ -532,6 +498,35 @@ export async function getActiveBookingForFarmer(
   if (snap.empty) return null;
   const d = snap.docs[0];
   return { id: d.id, ...(d.data() as Booking) };
+}
+
+function createdAtMillis(b: Booking): number {
+  const v = b.createdAt as unknown as { toMillis?: () => number } | undefined;
+  return v?.toMillis ? v.toMillis() : 0;
+}
+
+/**
+ * The booking the Procurement Status / Payment screens should show: the farmer's active booking
+ * if there is one, otherwise their most recently *completed* one. getActiveBookingForFarmer()
+ * alone isn't enough there — a booking becomes "completed" the moment quality check finishes,
+ * which is exactly when the farmer needs to see the payment breakdown, the payment stages and
+ * the objection button. Sorted client-side (a farmer has a handful of bookings, not thousands),
+ * which also avoids a composite index.
+ */
+export async function getLatestBookingForFarmer(
+  farmerId: string
+): Promise<BookingWithId | null> {
+  const snap = await getDocs(
+    query(collection(db, COLLECTIONS.bookings), where("farmerId", "==", farmerId))
+  );
+  const all = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Booking) }));
+  const byNewest = (a: BookingWithId, b: BookingWithId) => createdAtMillis(b) - createdAtMillis(a);
+  const active = all
+    .filter((b) => ["booked", "arrived", "processing"].includes(b.status))
+    .sort(byNewest);
+  if (active.length) return active[0];
+  const completed = all.filter((b) => b.status === "completed").sort(byNewest);
+  return completed[0] ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -609,7 +604,6 @@ export async function checkInBooking(input: {
       position: nextPosition,
       status: "waiting",
       estimatedWaitMinutes: (nextPosition - 1) * AVERAGE_PROCESSING_MINUTES,
-      ...(booking.isExpress ? { isExpress: true } : {}),
     };
     tx.set(queueRef, queueEntry);
 
@@ -653,7 +647,9 @@ export async function callNextInQueue(queueId: string): Promise<void> {
   const queueRef = doc(db, COLLECTIONS.queue, queueId);
   const notificationRef = doc(collection(db, COLLECTIONS.notifications));
 
-  await runTransaction(db, async (tx) => {
+  const text = callNextText(1);
+
+  const { farmerId, bookingId } = await runTransaction(db, async (tx) => {
     const queueSnap = await tx.get(queueRef);
     if (!queueSnap.exists()) throw new Error("Queue entry not found");
     const queueEntry = queueSnap.data() as QueueEntry;
@@ -665,17 +661,14 @@ export async function callNextInQueue(queueId: string): Promise<void> {
 
     tx.update(queueRef, { status: "processing" });
     tx.update(bookingRef, { status: "processing" });
-
-    const notification: AppNotification = {
-      farmerId: booking.farmerId,
-      type: "call_next",
-      message: "काउंटर 1 पर पहुंचें — आपकी बारी आ गई है।",
-      channel: "in_app",
-      status: "unread",
-      createdAt: serverTimestamp() as unknown as AppNotification["createdAt"],
-    };
-    tx.set(notificationRef, notification);
+    tx.set(
+      notificationRef,
+      buildNotification(booking.farmerId, queueEntry.bookingId, "call_next", text)
+    );
+    return { farmerId: booking.farmerId, bookingId: queueEntry.bookingId };
   });
+
+  await smsFarmer(farmerId, bookingId, [text]);
 }
 
 // ---------------------------------------------------------------------------
@@ -791,13 +784,14 @@ export interface RecordWeighingResult {
 /**
  * Weighing screen (UI/UX spec Operator screen 4) — creates the procurement doc for a booking
  * (idempotent: if the operator already weighed this booking once, e.g. after navigating back,
- * the same doc is reused rather than duplicated) and notifies the farmer with the exact copy
- * from Missing Details Polish sec. 1.
+ * the same doc is reused rather than duplicated), records which operator weighed it, and notifies
+ * the farmer in-app + by SMS. Weight is always in quintals.
  */
 export async function recordWeighing(input: {
   bookingId: string;
   farmerId: string;
   actualWeight: number;
+  staffId: string;
 }): Promise<RecordWeighingResult> {
   const existing = await getDocs(
     query(
@@ -810,6 +804,7 @@ export async function recordWeighing(input: {
     ? doc(collection(db, COLLECTIONS.procurement))
     : existing.docs[0].ref;
   const notificationRef = doc(collection(db, COLLECTIONS.notifications));
+  const text = weighingText(input.actualWeight);
 
   await runTransaction(db, async (tx) => {
     const procurement: Procurement = {
@@ -818,22 +813,25 @@ export async function recordWeighing(input: {
       qualityStatus: "pending",
       moisturePct: null,
       grade: null,
-      pricePerUnit: null,
       procurementStatus: "weighed",
+      mspPerQuintal: null,
+      grossAmount: null,
+      moistureLimitPct: null,
+      excessMoisturePct: null,
+      deductionPctPerPoint: null,
+      deductionRule: null,
+      deductionAmount: null,
+      finalAmount: null,
+      weighedByStaffId: input.staffId,
     };
     tx.set(procurementRef, procurement);
-
-    const notification: AppNotification = {
-      farmerId: input.farmerId,
-      type: "weighing_recorded",
-      message: `आपका वज़न दर्ज हुआ: ${input.actualWeight} किलो।`,
-      channel: "in_app",
-      status: "unread",
-      createdAt: serverTimestamp() as unknown as AppNotification["createdAt"],
-    };
-    tx.set(notificationRef, notification);
+    tx.set(
+      notificationRef,
+      buildNotification(input.farmerId, input.bookingId, "weighing_recorded", text)
+    );
   });
 
+  await smsFarmer(input.farmerId, input.bookingId, [text]);
   return { procurementId: procurementRef.id };
 }
 
@@ -844,18 +842,12 @@ export interface QualityCheckInput {
   farmerId: string;
   moisturePct: number;
   grade: string;
-  /**
-   * ₹ per unit the operator is paying for this lot. Pre-filled on the screen from the centre's
-   * configured price for the chosen grade, but always the operator's own typed number by the
-   * time it reaches here — the rate is never inferred from the grade letter.
-   */
-  pricePerUnit: number;
   decision: "accept" | "reject";
   rejectionReason?: string;
-  /** Needed to decrement this (centre, crop) pair's remainingCapacityQuintals on Accept —
-   * already known to the screen from the earlier Weighing step, so no extra document read is
-   * needed to get it. */
+  /** Quintals, from the Weighing step — the weight the payment and capacity decrement use. */
   actualWeight: number;
+  /** The operator doing the quality check (audit trail; objections reference it). */
+  staffId: string;
 }
 
 /**
@@ -865,64 +857,18 @@ export interface QualityCheckInput {
  * Details Polish sec. 8. Either outcome closes out the booking/queue entry — the farmer's turn
  * at the centre is over regardless of the quality outcome.
  *
- * On Accept only, this also decrements the booking's (centre, crop) pair's
- * remainingCapacityQuintals by the actual weighed quantity, in the same transaction — the
- * Daily Buying Capacity feature's core write. Only decrements if a centreCropCapacity doc
- * exists for that pair (opt-in — see the type comment in types/firestore.ts); most bookings
- * simply won't have one configured, and that's not an error, just "not capacity-gated." A
- * reject doesn't touch capacity at all (nothing was bought). Not clamped at 0: the last farmer
- * of the day can legitimately push the number slightly negative (their produce was already
- * weighed and is being bought regardless) — the feature's actual constraint is on *new*
- * bookings (see createBooking()'s CENTRE_CAPACITY_FULL check), not on a farmer already this far
- * into the process.
+ * Pricing is never typed by the operator: on Accept the lot is priced from src/config/msp.ts —
+ * weight × official MSP − moisture deduction — and every number of that breakdown is written to
+ * the procurement record in the same transaction, so what the farmer sees on their phone is the
+ * record itself. A crop with no verified MSP throws MSP_NOT_CONFIGURED rather than guessing.
  *
- * On Accept this also records the agreed rate (`pricePerUnit`) and raises the *simulated*
- * payment document for `actualWeight x pricePerUnit` — CLAUDE.md rule 6: no real money moves,
- * ever, and no payment gateway is contacted. It's created with status "processing" rather than
- * "completed" because that is the honest state: in real MSP procurement the money reaches the
- * farmer's account days later, and claiming otherwise on the Procurement Status tracker would
- * undercut the transparency the tracker exists for.
+ * On Accept this also decrements the (centre, crop) pair's remainingCapacityQuintals by the
+ * weighed quantity (only if a capacity doc exists — opt-in; not clamped at 0, since the
+ * constraint is on *new* bookings, see createBooking()), and raises the *simulated* payment at
+ * stage "quality_accepted" with an expected date of accept date + 3 days. CLAUDE.md rule 6: no
+ * real money moves, ever. In-app notifications are written in the transaction; the matching SMS
+ * go out after it commits.
  */
-/**
- * How many days after acceptance the farmer is told to expect the money.
- *
- * Not a spec number. MSP procurement is supposed to settle within 72 hours of the purchase, so
- * three days is the honest promise to print — and printing a date at all is the point: "payment
- * processing" with no date is exactly the open-ended limbo farmers are made to live in today,
- * where nobody will say when. A single named constant so the promise is changed in one place if
- * a state's actual settlement window differs.
- */
-export const PAYMENT_SETTLEMENT_DAYS = 3;
-
-/**
- * `from` plus `days`, as a "YYYY-MM-DD" calendar date in local time.
- *
- * Deliberately not toISOString().slice(0, 10) — that converts to UTC first, which in IST (UTC+5:30)
- * silently reports the *previous* day for anything before 05:30, so a payment accepted at 9am
- * would promise a date one day early.
- */
-export function expectedPaymentDate(from: Date, days: number = PAYMENT_SETTLEMENT_DAYS): string {
-  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() + days);
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${month}-${day}`;
-}
-
-/**
- * A "YYYY-MM-DD" date as "DD-MM-YYYY" for display.
- *
- * Deliberately numeric rather than a month name: the app ships in 12 languages and a localized
- * month table would be twelve more sets of strings to keep in step, while DD-MM-YYYY is the form
- * already printed on every Indian form a farmer has ever filled in. Returns the input unchanged
- * if it isn't a plain date, so an older payment doc without the field can't blank the line.
- */
-export function formatPaymentDate(isoDate: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
-  if (!match) return isoDate;
-  const [, year, month, day] = match;
-  return `${day}-${month}-${year}`;
-}
-
 export async function submitQualityCheck(input: QualityCheckInput): Promise<void> {
   const procurementRef = doc(db, COLLECTIONS.procurement, input.procurementId);
   const bookingRef = doc(db, COLLECTIONS.bookings, input.bookingId);
@@ -931,47 +877,52 @@ export async function submitQualityCheck(input: QualityCheckInput): Promise<void
   const paymentRef = doc(collection(db, COLLECTIONS.payments));
   const paymentNotificationRef = doc(collection(db, COLLECTIONS.notifications));
   const accepted = input.decision === "accept";
-  const payableAmount = Math.round(input.actualWeight * input.pricePerUnit);
   // Computed on the device rather than from serverTimestamp() because the farmer is promised a
   // calendar date, and a date has to exist before the write so the notification can quote the
   // same one the payment doc carries.
   const dueDate = expectedPaymentDate(new Date());
 
-  await runTransaction(db, async (tx) => {
-    // All reads (across every branch) must happen before any writes below, per Firestore
-    // transaction rules — so the booking/crop/capacity lookup, gated on `accepted`, has to run
-    // first.
+  const texts = await runTransaction(db, async (tx) => {
+    // All reads must happen before any writes, per Firestore transaction rules.
+    const bookingSnap = await tx.get(bookingRef);
+    if (!bookingSnap.exists()) throw new Error("Booking not found");
+    const booking = bookingSnap.data() as Booking;
+    // Bookings created since the commodity work carry their own cropType; older ones don't, so
+    // fall back to the crop doc.
+    let cropType = booking.cropType;
+    if (!cropType) {
+      const cropSnap = await tx.get(doc(db, COLLECTIONS.crops, booking.cropId));
+      if (cropSnap.exists()) cropType = (cropSnap.data() as Crop).cropType;
+    }
+
     let capacityRef: ReturnType<typeof doc> | undefined;
     let capacity: CentreCropCapacity | undefined;
-    if (accepted) {
-      const bookingSnap = await tx.get(bookingRef);
-      if (!bookingSnap.exists()) throw new Error("Booking not found");
-      const booking = bookingSnap.data() as Booking;
-      // Bookings created since the commodity work carry their own cropType; older ones don't, so
-      // fall back to the crop doc rather than skipping the capacity decrement for them.
-      let cropType = booking.cropType;
-      if (!cropType) {
-        const cropSnap = await tx.get(doc(db, COLLECTIONS.crops, booking.cropId));
-        if (cropSnap.exists()) cropType = (cropSnap.data() as Crop).cropType;
-      }
-      if (cropType) {
-        capacityRef = doc(
-          db,
-          COLLECTIONS.centreCropCapacity,
-          `${booking.centreId}_${cropType}`
-        );
-        const capacitySnap = await tx.get(capacityRef);
-        if (capacitySnap.exists()) capacity = capacitySnap.data() as CentreCropCapacity;
-      }
+    if (accepted && cropType) {
+      capacityRef = doc(db, COLLECTIONS.centreCropCapacity, `${booking.centreId}_${cropType}`);
+      const capacitySnap = await tx.get(capacityRef);
+      if (capacitySnap.exists()) capacity = capacitySnap.data() as CentreCropCapacity;
     }
+
+    const breakdown = accepted
+      ? computeBreakdown(cropType ?? "", input.actualWeight, input.moisturePct)
+      : null;
+    if (accepted && !breakdown) throw new Error("MSP_NOT_CONFIGURED");
 
     tx.update(procurementRef, {
       moisturePct: input.moisturePct,
       grade: input.grade,
-      // Null on a rejection: nothing was bought, so there is no rate to record.
-      pricePerUnit: accepted ? input.pricePerUnit : null,
       qualityStatus: accepted ? "accepted" : "rejected",
       procurementStatus: accepted ? "completed" : "rejected",
+      qualityCheckedByStaffId: input.staffId,
+      // Pricing fields stay null on a rejection: nothing was bought.
+      mspPerQuintal: breakdown?.mspPerQuintal ?? null,
+      grossAmount: breakdown?.grossAmount ?? null,
+      moistureLimitPct: breakdown?.moistureLimitPct ?? null,
+      excessMoisturePct: breakdown?.excessMoisturePct ?? null,
+      deductionPctPerPoint: breakdown?.deductionPctPerPoint ?? null,
+      deductionRule: breakdown?.deductionRule ?? null,
+      deductionAmount: breakdown?.deductionAmount ?? null,
+      finalAmount: breakdown?.finalAmount ?? null,
       ...(input.rejectionReason ? { rejectionReason: input.rejectionReason } : {}),
     });
     tx.update(bookingRef, { status: "completed" });
@@ -983,50 +934,46 @@ export async function submitQualityCheck(input: QualityCheckInput): Promise<void
       });
     }
 
-    if (accepted) {
-      const payment: Payment = {
-        procurementId: input.procurementId,
-        amount: payableAmount,
-        status: "processing",
-        transactionReference: null,
-        expectedPaymentDate: dueDate,
-      };
-      tx.set(paymentRef, payment);
+    const qualityText = breakdown
+      ? qualityAcceptedText(input.grade, breakdown)
+      : qualityRejectedText(input.moisturePct, input.rejectionReason);
+    tx.set(
+      notificationRef,
+      buildNotification(input.farmerId, input.bookingId, "quality_checked", qualityText)
+    );
+    if (!breakdown) return [qualityText];
 
-      const paymentNotification: AppNotification = {
-        farmerId: input.farmerId,
-        type: "payment_processing",
-        message:
-          `भुगतान प्रक्रिया में: ₹${payableAmount} (${input.actualWeight} × ₹${input.pricePerUnit})। ` +
-          `अपेक्षित तारीख: ${formatPaymentDate(dueDate)}।`,
-        channel: "in_app",
-        status: "unread",
-        createdAt: serverTimestamp() as unknown as AppNotification["createdAt"],
-      };
-      tx.set(paymentNotificationRef, paymentNotification);
-    }
-
-    const notification: AppNotification = {
+    const payment: Payment = {
+      procurementId: input.procurementId,
+      bookingId: input.bookingId,
       farmerId: input.farmerId,
-      type: "quality_checked",
-      // Missing Details Polish sec. 1 gives the exact accept copy; a distinct reject copy
-      // isn't specified there, so this is a reasonable extension, not a verbatim doc quote.
-      message: accepted
-        ? `गुणवत्ता जांच पूरी — ग्रेड: ${input.grade}।`
-        : `गुणवत्ता जांच पूरी — अस्वीकार किया गया${input.rejectionReason ? `: ${input.rejectionReason}` : "।"}`,
-      channel: "in_app",
-      status: "unread",
-      createdAt: serverTimestamp() as unknown as AppNotification["createdAt"],
+      amount: breakdown.finalAmount,
+      status: "quality_accepted",
+      transactionReference: null,
+      expectedPaymentDate: dueDate,
+      stageUpdatedAt: {
+        quality_accepted: serverTimestamp() as unknown as NonNullable<
+          Payment["stageUpdatedAt"]["quality_accepted"]
+        >,
+      },
     };
-    tx.set(notificationRef, notification);
+    tx.set(paymentRef, payment);
+    const paymentText = paymentStageText("quality_accepted", breakdown.finalAmount, dueDate);
+    tx.set(
+      paymentNotificationRef,
+      buildNotification(input.farmerId, input.bookingId, "payment_processing", paymentText)
+    );
+    return [qualityText, paymentText];
   });
+
+  await smsFarmer(input.farmerId, input.bookingId, texts);
 }
 
 /**
  * Reads one (centre, crop) pair's capacity doc — null means that pair isn't capacity-gated at
  * all (no admin has configured one). Used by SlotBookingScreen, which only needs its own
  * centre+crop, not a live listener (the screen already refreshes this after a failed booking
- * attempt, same as it does for slots/express availability).
+ * attempt, same as it does for slots).
  */
 export async function getCentreCropCapacity(
   centreId: string,
@@ -1085,34 +1032,6 @@ export async function increaseCentreCropCapacity(
   });
 }
 
-/**
- * Admin-only: sets what this centre pays per unit for each quality grade of one commodity.
- * Every price is typed in by the admin — nothing here derives a rate from the grade letter, by
- * design: the whole feature exists because "A" is worth a different number of rupees in
- * different mandis and different seasons, and a farmer comparing centres needs the real figure,
- * not a formula.
- *
- * Grades the admin left blank are dropped rather than written as 0 — an unpriced grade should
- * read as "no rate published" at quality check (operator types one free-hand), not as "this
- * grade is worth nothing." Merged into the existing capacity doc so a price update can never
- * clobber remainingCapacityQuintals, which other writers are concurrently decrementing.
- */
-export async function setCentreCropGradePrices(
-  centreId: string,
-  cropType: string,
-  gradePrices: Record<string, number>
-): Promise<void> {
-  const cleaned: Record<string, number> = {};
-  for (const [grade, price] of Object.entries(gradePrices)) {
-    if (Number.isFinite(price) && price > 0) cleaned[grade] = price;
-  }
-  await setDoc(
-    doc(db, COLLECTIONS.centreCropCapacity, `${centreId}_${cropType}`),
-    { gradePrices: cleaned },
-    { merge: true }
-  );
-}
-
 export interface CentreCropCapacityWithId extends CentreCropCapacity {
   id: string;
 }
@@ -1137,9 +1056,6 @@ export function listenCentreCropCapacities(
  * document for this crop simply doesn't appear in the returned map — the screen treats that as
  * "not capacity-gated," not "zero."
  *
- * Returns the whole row rather than just the remaining number because the same document now also
- * carries `gradePrices`, and a farmer comparing centres wants both figures ("how much can they
- * still buy" and "what will they pay me") from the one listener.
  */
 export function listenCropCapacityAcrossCentres(
   cropType: string,
@@ -1311,4 +1227,213 @@ export function listenAdminCentreBreakdown(
     unsubBookings();
     unsubQueue();
   };
+}
+
+// ---------------------------------------------------------------------------
+// Objections — the farmer disputes a recorded weight or quality/moisture result
+// ---------------------------------------------------------------------------
+
+export interface ObjectionWithId extends Objection {
+  id: string;
+}
+
+/** Deterministic id: one objection per booking per stage (see the Objection type comment). */
+export function objectionId(bookingId: string, stage: ObjectionStage): string {
+  return `${bookingId}_${stage}`;
+}
+
+/**
+ * Farmer raises an objection. The operator it's against is taken from the procurement record
+ * (weighedByStaffId for a weighing-stage objection, qualityCheckedByStaffId for quality), so the
+ * farmer never has to know or type who served them. firestore.rules only allow this for the
+ * farmer's own booking, and only as a *create* — a second objection on the same stage is an
+ * update, which only an admin may do.
+ */
+export async function raiseObjection(input: {
+  booking: BookingWithId;
+  procurement: ProcurementWithId;
+  stage: ObjectionStage;
+  reason: ObjectionReason;
+  note: string;
+}): Promise<void> {
+  const operatorStaffId =
+    (input.stage === "weighing"
+      ? input.procurement.weighedByStaffId
+      : input.procurement.qualityCheckedByStaffId) ?? null;
+  const objection: Objection = {
+    bookingId: input.booking.id,
+    farmerId: input.booking.farmerId,
+    centreId: input.booking.centreId,
+    procurementId: input.procurement.id,
+    stage: input.stage,
+    operatorStaffId,
+    reason: input.reason,
+    note: input.note.trim().slice(0, 500),
+    status: "open",
+    createdAt: serverTimestamp() as unknown as Objection["createdAt"],
+  };
+  await setDoc(doc(db, COLLECTIONS.objections, objectionId(input.booking.id, input.stage)), objection);
+}
+
+/**
+ * Farmer: live status of their objections for one booking — two single-document listeners
+ * (weighing + quality), not a query, so the owner-only read rule works (see the Objection type).
+ */
+export function listenObjectionsForBooking(
+  bookingId: string,
+  onChange: (byStage: Partial<Record<ObjectionStage, ObjectionWithId>>) => void
+): Unsubscribe {
+  const byStage: Partial<Record<ObjectionStage, ObjectionWithId>> = {};
+  const unsubs = (["weighing", "quality"] as ObjectionStage[]).map((stage) =>
+    onSnapshot(
+      doc(db, COLLECTIONS.objections, objectionId(bookingId, stage)),
+      (snap) => {
+        if (snap.exists()) byStage[stage] = { id: snap.id, ...(snap.data() as Objection) };
+        else delete byStage[stage];
+        onChange({ ...byStage });
+      },
+      (err) => console.error(err)
+    )
+  );
+  return () => unsubs.forEach((u) => u());
+}
+
+/** Admin: every objection, newest first. */
+export function listenAllObjections(onChange: (rows: ObjectionWithId[]) => void): Unsubscribe {
+  return onSnapshot(
+    query(collection(db, COLLECTIONS.objections), orderBy("createdAt", "desc")),
+    (snap) => onChange(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Objection) }))),
+    (err) => console.error(err)
+  );
+}
+
+/** Admin-only (enforced in firestore.rules): marks an objection resolved. */
+export async function resolveObjection(id: string, adminStaffId: string): Promise<void> {
+  await updateDoc(doc(db, COLLECTIONS.objections, id), {
+    status: "resolved",
+    resolvedAt: serverTimestamp(),
+    resolvedByStaffId: adminStaffId,
+  });
+}
+
+/** Staff display name for an id, or null if there's no such staff record. */
+export async function getStaffName(staffId: string): Promise<string | null> {
+  const snap = await getDoc(doc(db, COLLECTIONS.staff, staffId));
+  return snap.exists() ? (snap.data() as Staff).name : null;
+}
+
+// ---------------------------------------------------------------------------
+// Payment stages — Quality accepted -> J-Form generated -> Payment sent -> Credited to bank
+// ---------------------------------------------------------------------------
+
+export function nextPaymentStage(stage: PaymentStage): PaymentStage | null {
+  const i = PAYMENT_STAGES.indexOf(stage);
+  return i >= 0 && i < PAYMENT_STAGES.length - 1 ? PAYMENT_STAGES[i + 1] : null;
+}
+
+const STAGE_NOTIFICATION_TYPE: Record<PaymentStage, NotificationType> = {
+  quality_accepted: "payment_processing",
+  jform_generated: "payment_jform_generated",
+  payment_sent: "payment_sent",
+  credited: "payment_completed",
+};
+
+/**
+ * Admin moves a payment one stage forward (never skips, never goes back), and the farmer is
+ * notified in-app + by SMS for the new stage. Simulated only — reaching "payment_sent" assigns a
+ * simulated transaction reference; no bank or gateway is contacted (CLAUDE.md rule 6).
+ * firestore.rules keep payment updates admin-only, so an operator can't touch an amount or stage
+ * after the farmer has seen it.
+ */
+export async function advancePaymentStage(paymentId: string): Promise<PaymentStage> {
+  const paymentRef = doc(db, COLLECTIONS.payments, paymentId);
+  const notificationRef = doc(collection(db, COLLECTIONS.notifications));
+
+  const result = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(paymentRef);
+    if (!snap.exists()) throw new Error("Payment not found");
+    const payment = snap.data() as Payment;
+    const next = nextPaymentStage(payment.status);
+    if (!next) throw new Error("PAYMENT_ALREADY_CREDITED");
+
+    const transactionReference =
+      next === "payment_sent"
+        ? `SIM-${Date.now().toString(36).toUpperCase()}`
+        : payment.transactionReference;
+    tx.update(paymentRef, {
+      status: next,
+      transactionReference,
+      [`stageUpdatedAt.${next}`]: serverTimestamp(),
+    });
+    const text = paymentStageText(
+      next,
+      payment.amount,
+      payment.expectedPaymentDate,
+      transactionReference
+    );
+    tx.set(
+      notificationRef,
+      buildNotification(payment.farmerId, payment.bookingId, STAGE_NOTIFICATION_TYPE[next], text)
+    );
+    return { next, text, farmerId: payment.farmerId, bookingId: payment.bookingId };
+  });
+
+  await smsFarmer(result.farmerId, result.bookingId, [result.text]);
+  return result.next;
+}
+
+/** Admin: every payment (unfiltered list — securable, see CLAUDE.md's admin-query note). */
+export function listenAllPayments(onChange: (rows: PaymentWithId[]) => void): Unsubscribe {
+  return onSnapshot(
+    collection(db, COLLECTIONS.payments),
+    (snap) => onChange(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Payment) }))),
+    (err) => console.error(err)
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SMS log (simulated) — admin view
+// ---------------------------------------------------------------------------
+
+export interface SmsLogWithId extends SmsLogEntry {
+  id: string;
+}
+
+export function listenSmsLog(onChange: (rows: SmsLogWithId[]) => void): Unsubscribe {
+  return onSnapshot(
+    query(collection(db, COLLECTIONS.smsLog), orderBy("createdAt", "desc"), limit(200)),
+    (snap) => onChange(snap.docs.map((d) => ({ id: d.id, ...(d.data() as SmsLogEntry) }))),
+    (err) => console.error(err)
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Farmer: Payment screen
+// ---------------------------------------------------------------------------
+
+/**
+ * Real-time: every payment raised for this farmer (one per accepted lot), newest first by
+ * expected date. Payments carry farmerId since the payment-stages work; `where farmerId ==` is a
+ * plain equality filter, so no composite index is needed.
+ */
+export function listenPaymentsForFarmer(
+  farmerId: string,
+  onChange: (rows: PaymentWithId[]) => void,
+  onError?: (error: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    query(collection(db, COLLECTIONS.payments), where("farmerId", "==", farmerId)),
+    (snap) =>
+      onChange(
+        snap.docs
+          .map((d) => ({ id: d.id, ...(d.data() as Payment) }))
+          .sort((a, b) => b.expectedPaymentDate.localeCompare(a.expectedPaymentDate))
+      ),
+    (err) => onError?.(err)
+  );
+}
+
+export async function getProcurement(procurementId: string): Promise<ProcurementWithId | null> {
+  const snap = await getDoc(doc(db, COLLECTIONS.procurement, procurementId));
+  return snap.exists() ? { id: snap.id, ...(snap.data() as Procurement) } : null;
 }

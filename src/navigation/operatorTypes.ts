@@ -12,10 +12,10 @@ export type OperatorStackParamList = {
     actualWeight: number;
     /**
      * Which centre and which commodity this lot is — carried through from Weighing (which has
-     * already loaded the booking and the crop) purely so Quality Check can look up the centre's
-     * configured ₹/grade rates for *this* commodity and pre-fill the price field. Empty strings
-     * are tolerated: a booking predating `Booking.cropType` just means no pre-fill and the
-     * operator types the rate free-hand, which was the behaviour before rates existed at all.
+     * already loaded the booking and the crop) so Quality Check can look up this commodity's MSP
+     * and moisture rule (src/config/msp.ts) and show the payment breakdown live. An empty
+     * cropType (a booking predating `Booking.cropType`) simply finds no MSP; submitQualityCheck
+     * re-reads the crop from the booking itself before pricing, so the stored record is right.
      */
     centreId: string;
     cropType: string;
@@ -23,5 +23,8 @@ export type OperatorStackParamList = {
   AdminOverview: undefined;
   AdminDrilldown: undefined;
   AdminSettings: undefined;
+  AdminPayments: undefined;
+  AdminObjections: undefined;
+  AdminSmsLog: undefined;
   OperatorSettings: undefined;
 };

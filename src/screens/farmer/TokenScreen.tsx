@@ -108,7 +108,6 @@ export function TokenScreen({ route, navigation }: Props) {
       <Text style={styles.title}>{t("tokenScreenTitle")}</Text>
 
       <View style={styles.card}>
-        {booking.isExpress && <Text style={styles.expressBadge}>{t("expressBadge")}</Text>}
         <Text style={styles.token}>{booking.tokenNumber}</Text>
         <View style={styles.qrWrap}>
           <QRCode value={booking.tokenNumber} size={180} />
@@ -117,11 +116,6 @@ export function TokenScreen({ route, navigation }: Props) {
         {slot && (
           <Text style={styles.detail}>
             {slot.date} · {slot.startTime} - {slot.endTime}
-          </Text>
-        )}
-        {booking.isExpress && booking.expressFeePaid != null && (
-          <Text style={styles.expressFee}>
-            {t("expressFeePaidLabel")}: ₹{booking.expressFeePaid}
           </Text>
         )}
       </View>
@@ -181,6 +175,4 @@ const styles = StyleSheet.create({
   spacer: { height: spacing.xl },
   spacerSmall: { height: spacing.sm },
   error: { color: colors.error, textAlign: "center", marginTop: spacing.md },
-  expressBadge: { fontSize: fontSize.body, fontWeight: "800", color: colors.accent },
-  expressFee: { fontSize: fontSize.body, color: colors.textMuted },
 });

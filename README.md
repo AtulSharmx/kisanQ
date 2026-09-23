@@ -18,13 +18,21 @@ No local setup needed to try it — both surfaces are deployed against the real 
 | Surface | Link |
 |---|---|
 | **Operator / Admin** (web) | **[kisanq-farmer.web.app](https://kisanq-farmer.web.app)** |
-| **Farmer app** (Android) | **[Download APK](https://expo.dev/accounts/atulshxrma/projects/kisanq/builds/b64d0caf-3ba5-4e09-815a-7b32e5cd3d2f)** — open the link on an Android phone (or scan its QR code) and tap Install. No Play Store, no Expo account needed. |
+| **Farmer app** (Android) | **[Download APK](https://expo.dev/accounts/atulshxrma/projects/kisanq/builds/2ae5df23-c5e7-4cca-805a-de81535c2d62)** — open the link on an Android phone (or scan the QR code below) and tap Install. No Play Store, no Expo account needed. |
+
+<p align="center">
+  <a href="https://expo.dev/accounts/atulshxrma/projects/kisanq/builds/2ae5df23-c5e7-4cca-805a-de81535c2d62">
+    <img src="assets/apk-qr.png" alt="QR code — scan on an Android phone to install the KisanQ Farmer app" width="200" />
+  </a>
+  <br />
+  <sub>Scan on an Android phone to install the Farmer app</sub>
+</p>
 
 See [Demo credentials](#demo-credentials) below for the Staff ID/PIN to log into Operator/Admin.
 Farmers register through the app itself (any 12-digit Aadhaar, OTP shown on-screen).
 
 > **Note:** the Android build link is an EAS internal-distribution artifact, which expires
-> ~14 days after it was built — this one on 2026-09-29. If it's gone stale, rebuild it with
+> ~14 days after it was built — this one on 2026-10-07. If it's gone stale, rebuild it with
 > `eas build --platform android --profile preview` (see [`eas.json`](eas.json)) — everything
 > needed (Firebase config, keystore) is already configured on the EAS project.
 

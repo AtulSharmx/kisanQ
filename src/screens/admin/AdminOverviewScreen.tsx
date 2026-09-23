@@ -5,6 +5,7 @@ import type { OperatorStackParamList } from "../../navigation/operatorTypes";
 import { colors, fontSize, radius, shadow, spacing } from "../../theme";
 import { useLanguage } from "../../context/LanguageContext";
 import { useOperator } from "../../context/OperatorContext";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { listenAdminOverview, type AdminOverview } from "../../services/firestoreService";
 import type { StringKey } from "../../i18n/strings";
 
@@ -27,6 +28,9 @@ interface Card {
 export function AdminOverviewScreen({ navigation }: Props) {
   const { t } = useLanguage();
   const { staffName, logout } = useOperator();
+  // Logout asks first (design principle 9 — confirm before anything irreversible), same as the
+  // Settings screen's logout. ConfirmDialog, not Alert.alert, which is a no-op on web.
+  const [confirmingLogout, setConfirmingLogout] = useState(false);
   const [overview, setOverview] = useState<AdminOverview | null>(null);
 
   useEffect(() => {
@@ -90,7 +94,7 @@ export function AdminOverviewScreen({ navigation }: Props) {
             <Text style={styles.headerChipText}>⚙️ {t("adminSettingsLink")}</Text>
           </Pressable>
           <Pressable
-            onPress={logout}
+            onPress={() => setConfirmingLogout(true)}
             style={({ pressed }) => [styles.headerChip, styles.headerChipDanger, pressed && styles.pressed]}
           >
             <Text style={[styles.headerChipText, styles.headerChipDangerText]}>
@@ -109,6 +113,18 @@ export function AdminOverviewScreen({ navigation }: Props) {
           </View>
         ))}
       </ScrollView>
+      <ConfirmDialog
+        visible={confirmingLogout}
+        title={t("logoutConfirmTitle")}
+        confirmLabel={t("logoutConfirmYes")}
+        cancelLabel={t("cancelConfirmNo")}
+        destructive
+        onCancel={() => setConfirmingLogout(false)}
+        onConfirm={() => {
+          setConfirmingLogout(false);
+          logout();
+        }}
+      />
     </View>
   );
 }

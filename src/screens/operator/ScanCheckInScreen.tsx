@@ -6,6 +6,7 @@ import type { OperatorStackParamList } from "../../navigation/operatorTypes";
 import { colors, fontSize, radius, shadow, spacing, touchTarget } from "../../theme";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { OperatorHeader } from "../../components/OperatorHeader";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useLanguage } from "../../context/LanguageContext";
 import { useOperator } from "../../context/OperatorContext";
 import {
@@ -36,6 +37,9 @@ interface Candidate {
 export function ScanCheckInScreen({ navigation }: Props) {
   const { t, lang } = useLanguage();
   const { session, staffName, logout } = useOperator();
+  // Logout asks first (design principle 9 — confirm before anything irreversible), same as the
+  // Settings screen's logout. ConfirmDialog, not Alert.alert, which is a no-op on web.
+  const [confirmingLogout, setConfirmingLogout] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = useState(false);
   const [manualToken, setManualToken] = useState("");
@@ -117,7 +121,7 @@ export function ScanCheckInScreen({ navigation }: Props) {
             label: t("adminSettingsLink"),
             onPress: () => navigation.navigate("OperatorSettings"),
           },
-          { icon: "🚪", label: t("logoutBtn"), onPress: logout, danger: true },
+          { icon: "🚪", label: t("logoutBtn"), onPress: () => setConfirmingLogout(true), danger: true },
         ]}
       />
 
@@ -185,6 +189,19 @@ export function ScanCheckInScreen({ navigation }: Props) {
           </View>
         )}
       </ScrollView>
+
+      <ConfirmDialog
+        visible={confirmingLogout}
+        title={t("logoutConfirmTitle")}
+        confirmLabel={t("logoutConfirmYes")}
+        cancelLabel={t("cancelConfirmNo")}
+        destructive
+        onCancel={() => setConfirmingLogout(false)}
+        onConfirm={() => {
+          setConfirmingLogout(false);
+          logout();
+        }}
+      />
     </View>
   );
 }

@@ -13,6 +13,7 @@ import type { OperatorStackParamList } from "../../navigation/operatorTypes";
 import { colors, fontSize, radius, shadow, spacing, touchTarget } from "../../theme";
 import { useLanguage } from "../../context/LanguageContext";
 import { useOperator } from "../../context/OperatorContext";
+import { OperatorHeader } from "../../components/OperatorHeader";
 import {
   commodityLabelFor,
   type CommodityOption,
@@ -68,26 +69,14 @@ export function AdminDrilldownScreen({ navigation }: Props) {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerAppName}>KisanQ — {t("adminDrilldownTitle")}</Text>
-          <Text style={styles.headerStaffName}>{staffName}</Text>
-        </View>
-        <View style={styles.headerActions}>
-          <Pressable
-            onPress={() => navigation.navigate("AdminOverview")}
-            style={({ pressed }) => [styles.headerChip, pressed && styles.pressed]}
-          >
-            <Text style={styles.headerChipText}>{t("backToOverview")}</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => navigation.navigate("AdminSettings")}
-            style={({ pressed }) => [styles.headerChip, pressed && styles.pressed]}
-          >
-            <Text style={styles.headerChipText}>⚙️ {t("adminSettingsLink")}</Text>
-          </Pressable>
-        </View>
-      </View>
+      <OperatorHeader
+        title={t("adminDrilldownTitle")}
+        staffName={staffName}
+        actions={[
+          { icon: "←", label: t("backToOverview"), onPress: () => navigation.navigate("AdminOverview") },
+          { icon: "⚙️", label: t("adminSettingsLink"), onPress: () => navigation.navigate("AdminSettings") },
+        ]}
+      />
 
       {!rows ? (
         <ActivityIndicator style={styles.loader} color={colors.primary} />
@@ -115,9 +104,20 @@ export function AdminDrilldownScreen({ navigation }: Props) {
                     <Text style={styles.cell}>{row.completed}</Text>
                     <Text style={styles.cell}>{row.waiting}</Text>
                     <Text style={styles.cell}>{row.averageWaitMinutes}m</Text>
-                    <Text style={[styles.cell, row.overloaded && styles.overloadedText]}>
-                      {row.utilizationPct}% {row.overloaded ? "⚠️" : ""}
-                    </Text>
+                    <View style={[styles.cell, styles.utilizationCell]}>
+                      <View style={styles.utilizationTrack}>
+                        <View
+                          style={[
+                            styles.utilizationFill,
+                            row.overloaded && styles.utilizationFillOverloaded,
+                            { width: `${Math.min(100, row.utilizationPct)}%` },
+                          ]}
+                        />
+                      </View>
+                      <Text style={[styles.utilizationLabel, row.overloaded && styles.overloadedText]}>
+                        {row.utilizationPct}% {row.overloaded ? "⚠️" : ""}
+                      </Text>
+                    </View>
                   </View>
                   <CentreCapacitySection
                     centreId={row.centre.id}
@@ -350,31 +350,6 @@ function AddCapacityRow({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   loader: { marginTop: spacing.xl },
-  header: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  headerAppName: { fontSize: fontSize.label, fontWeight: "800", color: colors.primary },
-  headerStaffName: { fontSize: fontSize.body, color: colors.textMuted, marginTop: 2 },
-  headerActions: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
-  headerChip: {
-    minHeight: 40,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerChipText: { color: colors.primary, fontWeight: "700", fontSize: fontSize.body },
   content: { padding: spacing.lg, maxWidth: 800, width: "100%", alignSelf: "center" },
   tableHeaderRow: {
     flexDirection: "row",
@@ -401,6 +376,16 @@ const styles = StyleSheet.create({
   cell: { flex: 1, color: colors.text, fontSize: fontSize.body },
   centreName: { fontWeight: "700" },
   overloadedText: { color: colors.error, fontWeight: "700" },
+  utilizationCell: { gap: spacing.xs },
+  utilizationTrack: {
+    height: 8,
+    borderRadius: radius.pill,
+    backgroundColor: colors.background,
+    overflow: "hidden",
+  },
+  utilizationFill: { height: "100%", borderRadius: radius.pill, backgroundColor: colors.primary },
+  utilizationFillOverloaded: { backgroundColor: colors.error },
+  utilizationLabel: { fontSize: fontSize.body, color: colors.text, fontWeight: "700" },
   footnote: { marginTop: spacing.lg, color: colors.textMuted, fontSize: fontSize.body },
   centreBlock: {
     backgroundColor: colors.surface,

@@ -1,6 +1,6 @@
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, fontSize, radius, spacing } from "../theme";
+import { colors, fontSize, radius, shadow, spacing } from "../theme";
 
 export interface OperatorHeaderAction {
   icon: string;
@@ -16,17 +16,23 @@ interface Props {
 }
 
 /**
- * Shared Operator/Admin screen header — icon-labelled chip actions on the right, app name +
- * staff name on the left, matching AdminOverviewScreen/AdminDrilldownScreen's header exactly so
- * the whole staff-facing side of the app (not just Admin) has one consistent, non-basic-looking
- * chrome instead of every screen rolling its own plain-text-link header.
+ * Shared Operator/Admin screen header — brand mark + app name/staff name on the left, icon
+ * chip actions on the right. A single shared component so refining the header's look (shadow,
+ * brand mark, chip styling) updates every Operator and Admin screen at once instead of each
+ * screen rolling its own copy.
  */
 export function OperatorHeader({ title, staffName, actions }: Props) {
   return (
     <View style={styles.header}>
-      <View>
-        <Text style={styles.headerAppName}>KisanQ — {title}</Text>
-        {staffName && <Text style={styles.headerStaffName}>{staffName}</Text>}
+      <View style={styles.headerLeft}>
+        <View style={styles.brandMark}>
+          <Text style={styles.brandMarkText}>🌾</Text>
+        </View>
+        <View>
+          <Text style={styles.headerAppName}>KisanQ</Text>
+          <Text style={styles.headerTitle}>{title}</Text>
+          {staffName && <Text style={styles.headerStaffName}>{staffName}</Text>}
+        </View>
       </View>
       <View style={styles.headerActions}>
         {actions.map((action) => (
@@ -56,12 +62,24 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     gap: spacing.sm,
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     backgroundColor: colors.surface,
+    zIndex: 1,
+    ...shadow.card,
   },
-  headerAppName: { fontSize: fontSize.label, fontWeight: "800", color: colors.primary },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  brandMark: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: colors.primaryTint,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  brandMarkText: { fontSize: 20 },
+  headerAppName: { fontSize: 12, fontWeight: "800", color: colors.textMuted, letterSpacing: 1 },
+  headerTitle: { fontSize: fontSize.header, fontWeight: "800", color: colors.primary },
   headerStaffName: { fontSize: fontSize.body, color: colors.textMuted, marginTop: 2 },
   headerActions: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
   headerChip: {

@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import Svg, { Rect } from "react-native-svg";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { OperatorStackParamList } from "../../navigation/operatorTypes";
 import { colors, fontSize, radius, shadow, spacing } from "../../theme";
 import { useLanguage } from "../../context/LanguageContext";
 import { useOperator } from "../../context/OperatorContext";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { OperatorHeader } from "../../components/OperatorHeader";
+import { StatCard } from "../../components/StatCard";
 import { listenAdminOverview, type AdminOverview } from "../../services/firestoreService";
 import type { StringKey } from "../../i18n/strings";
 
@@ -18,12 +21,13 @@ interface Card {
   accent?: boolean;
 }
 
+const CHART_HEIGHT = 28;
+
 /**
- * Admin Overview — UI/UX spec Admin screen 1. Real-time top counters as icon cards, with a
- * proper header (Settings + District→Centre + Logout as distinct tappable chips, not bare text
- * links) matching the same visual language (icons, shadow.card, press feedback) the Farmer app
- * already has — this screen previously had none of that, which read as noticeably more basic
- * than the rest of the app.
+ * Admin Overview — UI/UX spec Admin screen 1. Real-time top counters as StatCards, plus a Live
+ * Queue Health bar visualising how today's bookings split across completed / in-progress /
+ * waiting — the same three numbers as the counters above, just given a shape a glance can read.
+ * Header/nav actions moved to the shared OperatorHeader (was previously duplicated inline here).
  */
 export function AdminOverviewScreen({ navigation }: Props) {
   const { t } = useLanguage();
@@ -55,63 +59,73 @@ export function AdminOverviewScreen({ navigation }: Props) {
     { icon: "⏱️", labelKey: "statAvgWait", value: overview.averageWaitMinutes, accent: true },
   ];
 
+  const inProgress = Math.max(
+    0,
+    overview.totalBookings - overview.completedBookings - overview.currentlyWaiting
+  );
+  const chartTotal = Math.max(1, overview.totalBookings);
+  const completedPct = overview.completedBookings / chartTotal;
+  const inProgressPct = inProgress / chartTotal;
+  const waitingPct = overview.currentlyWaiting / chartTotal;
+
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerAppName}>KisanQ — {t("adminOverviewTitle")}</Text>
-          <Text style={styles.headerStaffName}>{staffName}</Text>
-        </View>
-        <View style={styles.headerActions}>
-          <Pressable
-            onPress={() => navigation.navigate("AdminDrilldown")}
-            style={({ pressed }) => [styles.headerChip, pressed && styles.pressed]}
-          >
-            <Text style={styles.headerChipText}>🗺️ {t("adminDrilldownLink")}</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => navigation.navigate("AdminPayments")}
-            style={({ pressed }) => [styles.headerChip, pressed && styles.pressed]}
-          >
-            <Text style={styles.headerChipText}>💰 {t("adminPaymentsLink")}</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => navigation.navigate("AdminObjections")}
-            style={({ pressed }) => [styles.headerChip, pressed && styles.pressed]}
-          >
-            <Text style={styles.headerChipText}>✋ {t("adminObjectionsLink")}</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => navigation.navigate("AdminSmsLog")}
-            style={({ pressed }) => [styles.headerChip, pressed && styles.pressed]}
-          >
-            <Text style={styles.headerChipText}>📩 {t("adminSmsLogLink")}</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => navigation.navigate("AdminSettings")}
-            style={({ pressed }) => [styles.headerChip, pressed && styles.pressed]}
-          >
-            <Text style={styles.headerChipText}>⚙️ {t("adminSettingsLink")}</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setConfirmingLogout(true)}
-            style={({ pressed }) => [styles.headerChip, styles.headerChipDanger, pressed && styles.pressed]}
-          >
-            <Text style={[styles.headerChipText, styles.headerChipDangerText]}>
-              🚪 {t("logoutBtn")}
-            </Text>
-          </Pressable>
-        </View>
-      </View>
+      <OperatorHeader
+        title={t("adminOverviewTitle")}
+        staffName={staffName}
+        actions={[
+          { icon: "🗺️", label: t("adminDrilldownLink"), onPress: () => navigation.navigate("AdminDrilldown") },
+          { icon: "💰", label: t("adminPaymentsLink"), onPress: () => navigation.navigate("AdminPayments") },
+          { icon: "✋", label: t("adminObjectionsLink"), onPress: () => navigation.navigate("AdminObjections") },
+          { icon: "📩", label: t("adminSmsLogLink"), onPress: () => navigation.navigate("AdminSmsLog") },
+          { icon: "⚙️", label: t("adminSettingsLink"), onPress: () => navigation.navigate("AdminSettings") },
+          { icon: "🚪", label: t("logoutBtn"), onPress: () => setConfirmingLogout(true), danger: true },
+        ]}
+      />
 
-      <ScrollView contentContainerStyle={styles.grid}>
-        {cards.map((card) => (
-          <View key={card.labelKey} style={[styles.card, card.accent && styles.cardAccent]}>
-            <Text style={styles.cardIcon}>{card.icon}</Text>
-            <Text style={styles.cardValue}>{card.value}</Text>
-            <Text style={styles.cardLabel}>{t(card.labelKey)}</Text>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.grid}>
+          {cards.map((card) => (
+            <StatCard
+              key={card.labelKey}
+              icon={card.icon}
+              value={card.value}
+              label={t(card.labelKey)}
+              tone={card.accent ? "accent" : "primary"}
+            />
+          ))}
+        </View>
+
+        <View style={styles.chartCard}>
+          <Svg width="100%" height={CHART_HEIGHT} viewBox="0 0 100 10">
+            <Rect x={0} y={0} width={100} height={10} rx={5} fill={colors.border} />
+            {overview.totalBookings > 0 && (
+              <>
+                <Rect x={0} y={0} width={completedPct * 100} height={10} rx={5} fill={colors.primary} />
+                <Rect
+                  x={completedPct * 100}
+                  y={0}
+                  width={inProgressPct * 100}
+                  height={10}
+                  fill={colors.disabled}
+                />
+                <Rect
+                  x={(completedPct + inProgressPct) * 100}
+                  y={0}
+                  width={waitingPct * 100}
+                  height={10}
+                  rx={5}
+                  fill={colors.accent}
+                />
+              </>
+            )}
+          </Svg>
+          <View style={styles.legendRow}>
+            <LegendItem swatch={colors.primary} label={t("statCompleted")} value={overview.completedBookings} />
+            <LegendItem swatch={colors.disabled} label={t("operatorTabProcessing")} value={inProgress} />
+            <LegendItem swatch={colors.accent} label={t("statCurrentlyWaiting")} value={overview.currentlyWaiting} />
           </View>
-        ))}
+        </View>
       </ScrollView>
       <ConfirmDialog
         visible={confirmingLogout}
@@ -129,60 +143,31 @@ export function AdminOverviewScreen({ navigation }: Props) {
   );
 }
 
+function LegendItem({ swatch, label, value }: { swatch: string; label: string; value: number }) {
+  return (
+    <View style={styles.legendItem}>
+      <View style={[styles.legendDot, { backgroundColor: swatch }]} />
+      <Text style={styles.legendText}>
+        {label} · {value}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   loader: { marginTop: spacing.xl },
-  header: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  headerAppName: { fontSize: fontSize.label, fontWeight: "800", color: colors.primary },
-  headerStaffName: { fontSize: fontSize.body, color: colors.textMuted, marginTop: 2 },
-  headerActions: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
-  headerChip: {
-    minHeight: 40,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerChipDanger: { borderColor: colors.errorTint, backgroundColor: colors.errorTint },
-  headerChipText: { color: colors.primary, fontWeight: "700", fontSize: fontSize.body },
-  headerChipDangerText: { color: colors.error },
-  grid: {
-    padding: spacing.lg,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.md,
-    maxWidth: 720,
-    width: "100%",
-    alignSelf: "center",
-  },
-  card: {
-    flexBasis: "31%",
-    minWidth: 160,
+  content: { padding: spacing.lg, maxWidth: 760, width: "100%", alignSelf: "center", gap: spacing.lg },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
+  chartCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.lg,
-    alignItems: "center",
+    gap: spacing.md,
     ...shadow.card,
-    gap: spacing.xs,
   },
-  cardAccent: { borderColor: colors.accent, backgroundColor: colors.accentTint },
-  cardIcon: { fontSize: 28 },
-  cardValue: { fontSize: fontSize.display, fontWeight: "800", color: colors.primary },
-  cardLabel: { fontSize: fontSize.body, color: colors.textMuted, textAlign: "center" },
-  pressed: { opacity: 0.7 },
+  legendRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.lg },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  legendDot: { width: 12, height: 12, borderRadius: 6 },
+  legendText: { fontSize: fontSize.body, color: colors.textMuted, fontWeight: "600" },
 });

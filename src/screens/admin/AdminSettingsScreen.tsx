@@ -5,6 +5,7 @@ import type { OperatorStackParamList } from "../../navigation/operatorTypes";
 import { colors, fontSize, radius, shadow, spacing, touchTarget } from "../../theme";
 import { useLanguage } from "../../context/LanguageContext";
 import { useOperator } from "../../context/OperatorContext";
+import { OperatorHeader } from "../../components/OperatorHeader";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { commodityLabel, unitLabel } from "../../data/commodities";
@@ -59,17 +60,13 @@ export function AdminSettingsScreen({ navigation }: Props) {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>
-          {t("adminSettingsLink")} ({staffName})
-        </Text>
-        <Pressable
-          onPress={() => navigation.navigate("AdminOverview")}
-          style={({ pressed }) => pressed && styles.pressed}
-        >
-          <Text style={styles.headerLink}>{t("backToOverview")}</Text>
-        </Pressable>
-      </View>
+      <OperatorHeader
+        title={t("adminSettingsLink")}
+        staffName={staffName}
+        actions={[
+          { icon: "←", label: t("backToOverview"), onPress: () => navigation.navigate("AdminOverview") },
+        ]}
+      />
 
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.sectionLabel}>{t("changeLanguageLabel")}</Text>
@@ -234,17 +231,6 @@ function CommoditiesSection() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  headerTitle: { fontSize: fontSize.label, fontWeight: "800", color: colors.text },
-  headerLink: { color: colors.primary, fontWeight: "700" },
   content: { padding: spacing.lg, maxWidth: 480, width: "100%", alignSelf: "center" },
   sectionLabel: { fontSize: fontSize.body, color: colors.textMuted, marginBottom: spacing.sm },
   langCard: {

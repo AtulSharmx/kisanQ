@@ -19,6 +19,11 @@ import { PaymentScreen } from "../screens/farmer/PaymentScreen";
 import { NotificationsScreen } from "../screens/farmer/NotificationsScreen";
 import { SettingsScreen } from "../screens/farmer/SettingsScreen";
 import { ComingSoonScreen } from "../screens/farmer/ComingSoonScreen";
+import { GovernmentServicesScreen } from "../screens/farmer/interop/GovernmentServicesScreen";
+import { SchemeSelectionScreen } from "../screens/farmer/interop/SchemeSelectionScreen";
+import { ConsentScreen } from "../screens/farmer/interop/ConsentScreen";
+import { MyApplicationsScreen } from "../screens/farmer/interop/MyApplicationsScreen";
+import { MyConsentsScreen } from "../screens/farmer/interop/MyConsentsScreen";
 import { colors } from "../theme";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -53,6 +58,11 @@ export function AppNavigator({ initialRouteName }: { initialRouteName: "Splash" 
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="ComingSoon" component={ComingSoonScreen} />
+      <Stack.Screen name="GovernmentServices" component={GovernmentServicesScreen} />
+      <Stack.Screen name="SchemeSelection" component={SchemeSelectionScreen} />
+      <Stack.Screen name="ConsentScreen" component={ConsentScreen} />
+      <Stack.Screen name="MyApplications" component={MyApplicationsScreen} />
+      <Stack.Screen name="MyConsents" component={MyConsentsScreen} />
     </Stack.Navigator>
   );
 }

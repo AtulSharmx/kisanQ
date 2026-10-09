@@ -26,5 +26,6 @@ export type OperatorStackParamList = {
   AdminPayments: undefined;
   AdminObjections: undefined;
   AdminSmsLog: undefined;
+  AdminIntegration: undefined;
   OperatorSettings: undefined;
 };

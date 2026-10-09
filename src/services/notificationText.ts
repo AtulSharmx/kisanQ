@@ -105,3 +105,18 @@ export function paymentStageText(
       };
   }
 }
+
+export function schemeStatusChangedText(schemeName: string, newStatus: string): NotificationText {
+  return {
+    hi: `आपकी ${schemeName} योजना के आवेदन की स्थिति अपडेट हुई: ${newStatus}`,
+    en: `Your ${schemeName} application status has been updated: ${newStatus}`,
+  };
+}
+
+export function schemeApprovedText(schemeName: string, applicationId: string): NotificationText {
+  return {
+    hi: `बधाई हो! आपकी ${schemeName} योजना की अर्जी स्वीकार हो गई। (संदर्भ: ${applicationId})`,
+    en: `Congratulations! Your ${schemeName} application has been approved. (Ref: ${applicationId})`,
+  };
+}
+

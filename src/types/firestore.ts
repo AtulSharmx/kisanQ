@@ -406,4 +406,8 @@ export const COLLECTIONS = {
   smsLog: "smsLog",
   staff: "staff",
   staffSessions: "staffSessions",
+  consents: "consents",
+  interopApplications: "interopApplications",
+  auditLogs: "auditLogs",
+  mockGovSchemeApplications: "mockGovSchemeApplications",
 } as const;

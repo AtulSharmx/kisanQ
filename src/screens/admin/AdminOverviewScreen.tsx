@@ -94,6 +94,12 @@ export function AdminOverviewScreen({ navigation }: Props) {
             <Text style={styles.headerChipText}>⚙️ {t("adminSettingsLink")}</Text>
           </Pressable>
           <Pressable
+            onPress={() => navigation.navigate("AdminIntegration")}
+            style={({ pressed }) => [styles.headerChip, pressed && styles.pressed]}
+          >
+            <Text style={styles.headerChipText}>🔗 {t("adminIntegrationLink") || "Integration"}</Text>
+          </Pressable>
+          <Pressable
             onPress={() => setConfirmingLogout(true)}
             style={({ pressed }) => [styles.headerChip, styles.headerChipDanger, pressed && styles.pressed]}
           >

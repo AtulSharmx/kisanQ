@@ -299,5 +299,50 @@ service cloud.firestore {
       allow create, update: if isSignedIn() && request.auth.uid == uid && claimedMatchesRealStaff();
       allow delete: if isSignedIn() && request.auth.uid == uid; // logout
     }
+
+    // ── SIH26129 INTEROPERABILITY RULES ─────────────────────────────────────────
+    // Farmer reads are owner-only with no get(), provable from the farmer's own
+    // where("farmerId", "==", uid) listeners — so they don't hit the get()-in-list-queries
+    // limitation above (no `|| isAdmin()` OR-branch on them, see CLAUDE.md). Admin reads use
+    // isAdmin() alone on unfiltered lists, same as Admin Objections. Status changes are
+    // admin-only, so a farmer can't approve their own scheme application.
+
+    match /consents/{consentId} {
+      allow read: if isOwner(resource.data.farmerId);
+      allow create: if isOwner(request.resource.data.farmerId)
+        && request.resource.data.status == "ACTIVE";
+      // The farmer may only revoke their own consent.
+      allow update: if isOwner(resource.data.farmerId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status"])
+        && request.resource.data.status == "REVOKED";
+      allow delete: if false;
+    }
+
+    match /interopApplications/{externalApplicationId} {
+      // Doc id is the externalApplicationId, so advanceMockGovApplicationStatus() updates it by
+      // id — the admin never needs to query (list) this collection.
+      allow read: if isOwner(resource.data.farmerId);
+      allow create: if isOwner(request.resource.data.farmerId)
+        && request.resource.data.status == "PENDING";
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      // isAdmin(): the admin's STATUS_UPDATE entry is logged under the farmer's id.
+      allow create: if isOwner(request.resource.data.farmerId) || isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /mockGovSchemeApplications/{appId} {
+      // *** MOCK GOVERNMENT SYSTEM — PROTOTYPE ONLY ***
+      allow read: if isAdmin();
+      allow create: if isOwner(request.resource.data.farmerId)
+        && request.resource.data.status == "PENDING";
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+    // ── END SIH26129 INTEROPERABILITY RULES ──────────────────────────────────────
   }
 }

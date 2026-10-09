@@ -72,6 +72,11 @@ export function HomeScreen({ navigation }: Props) {
           label={t("homeSettings")}
           onPress={() => navigation.navigate("Settings")}
         />
+        <IconTile
+          icon="🏛️"
+          label={t("homeGovServices") || "Govt Services"}
+          onPress={() => navigation.navigate("GovernmentServices")}
+        />
       </View>
 
       {checkingToken && <ActivityIndicator style={styles.loader} color={colors.primary} />}

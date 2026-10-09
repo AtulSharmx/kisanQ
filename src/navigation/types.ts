@@ -17,4 +17,9 @@ export type RootStackParamList = {
   Notifications: undefined;
   Settings: undefined;
   ComingSoon: { titleKey: "homeMyProduce" };
+  GovernmentServices: undefined;
+  SchemeSelection: { schemeId: string; schemeName: string };
+  ConsentScreen: { schemeId: string; schemeName: string; requestedFields: string[]; purpose: string };
+  MyApplications: undefined;
+  MyConsents: undefined;
 };

@@ -14,6 +14,7 @@ import { AdminSettingsScreen } from "../screens/admin/AdminSettingsScreen";
 import { AdminPaymentsScreen } from "../screens/admin/AdminPaymentsScreen";
 import { AdminObjectionsScreen } from "../screens/admin/AdminObjectionsScreen";
 import { AdminSmsLogScreen } from "../screens/admin/AdminSmsLogScreen";
+import { AdminIntegrationScreen } from "../screens/admin/AdminIntegrationScreen";
 import { OperatorSettingsScreen } from "../screens/operator/OperatorSettingsScreen";
 import { colors } from "../theme";
 
@@ -58,6 +59,7 @@ export function OperatorNavigator() {
         <Stack.Screen name="AdminPayments" component={AdminPaymentsScreen} />
         <Stack.Screen name="AdminObjections" component={AdminObjectionsScreen} />
         <Stack.Screen name="AdminSmsLog" component={AdminSmsLogScreen} />
+        <Stack.Screen name="AdminIntegration" component={AdminIntegrationScreen} />
       </Stack.Navigator>
     );
   }

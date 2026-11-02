@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { colors, fontSize, radius, shadow, spacing } from "../../theme";
 import { useLanguage } from "../../context/LanguageContext";
@@ -6,6 +6,7 @@ import { useFarmer } from "../../context/FarmerContext";
 import { ScreenContainer } from "../../components/ScreenContainer";
 import {
   listenNotifications,
+  markNotificationsRead,
   type NotificationWithId,
 } from "../../services/firestoreService";
 import type { NotificationType } from "../../types/firestore";
@@ -44,10 +45,28 @@ export function NotificationsScreen() {
   const { farmerId } = useFarmer();
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<NotificationWithId[]>([]);
+  // Which notifications were still unread when this screen was opened. They keep their
+  // highlight for the whole visit even after being marked read in Firestore — otherwise
+  // "what's new" would vanish from under the farmer the instant the write landed, which is
+  // exactly the information they came to this screen for. Next visit they're plain.
+  // State, not a ref, because it's read while rendering; the ref beside it is only a latch,
+  // written and read inside the listener callback, so the capture happens on the first
+  // snapshot only and later snapshots don't re-mark anything.
+  const [unreadOnOpen, setUnreadOnOpen] = useState<Set<string>>(() => new Set());
+  const captured = useRef(false);
 
   useEffect(() => {
     if (!farmerId) return;
+    captured.current = false;
     const unsubscribe = listenNotifications(farmerId, (items) => {
+      if (!captured.current) {
+        captured.current = true;
+        const unreadIds = items.filter((n) => n.status === "unread").map((n) => n.id);
+        setUnreadOnOpen(new Set(unreadIds));
+        // Fire-and-forget; markNotificationsRead swallows its own failures, and the listener
+        // reports the new status whenever it lands.
+        void markNotificationsRead(unreadIds);
+      }
       setNotifications(items);
       setLoading(false);
     });
@@ -76,23 +95,23 @@ export function NotificationsScreen() {
   return (
     <ScreenContainer>
       <Text style={styles.title}>{t("homeNotifications")}</Text>
-      {notifications.map((n) => (
-        <View
-          key={n.id}
-          style={[styles.card, n.status === "unread" && styles.cardUnread]}
-        >
-          <Text style={styles.icon}>{ICONS[n.type] ?? "🔔"}</Text>
-          <View style={styles.textWrap}>
-            <Text style={[styles.message, n.status === "unread" && styles.messageUnread]}>
-              {/* Hindi `message` is the default (and the SMS text); English UI shows messageEn when the
-                  notification has one. Other languages fall back to Hindi. */}
-              {lang === "en" && n.messageEn ? n.messageEn : n.message}
-            </Text>
-            <Text style={styles.time}>{formatTime(n)}</Text>
+      {notifications.map((n) => {
+        const unread = unreadOnOpen.has(n.id);
+        return (
+          <View key={n.id} style={[styles.card, unread && styles.cardUnread]}>
+            <Text style={styles.icon}>{ICONS[n.type] ?? "🔔"}</Text>
+            <View style={styles.textWrap}>
+              <Text style={[styles.message, unread && styles.messageUnread]}>
+                {/* Hindi `message` is the default (and the SMS text); English UI shows messageEn when the
+                    notification has one. Other languages fall back to Hindi. */}
+                {lang === "en" && n.messageEn ? n.messageEn : n.message}
+              </Text>
+              <Text style={styles.time}>{formatTime(n)}</Text>
+            </View>
+            {unread && <View style={styles.unreadDot} />}
           </View>
-          {n.status === "unread" && <View style={styles.unreadDot} />}
-        </View>
-      ))}
+        );
+      })}
     </ScreenContainer>
   );
 }

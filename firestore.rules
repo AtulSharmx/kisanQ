@@ -265,7 +265,18 @@ service cloud.firestore {
       // actually readable by farmers, since an unscoped create let any signed-in farmer forge a
       // notification claiming to be from the system for a different farmerId.
       allow create: if isStaff();
-      allow update, delete: if isAdmin();
+      // A farmer may mark their *own* notification read, and change nothing else about it.
+      // Unlike the read rule above this is a single-document write, so the owner check works
+      // here (the get()-in-list-queries limitation only affects list reads) — same shape as the
+      // farmer-cancels-their-own-booking branch on bookings/. Without this the status field was
+      // write-once: nothing in the app could ever clear the unread marker, so every notification
+      // a farmer had already read stayed bold with an unread dot forever.
+      allow update: if isAdmin()
+        || (isSignedIn()
+            && resource.data.farmerId == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status"])
+            && request.resource.data.status == "read");
+      allow delete: if isAdmin();
     }
 
     match /staff/{staffId} {

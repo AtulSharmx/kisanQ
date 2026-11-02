@@ -4,16 +4,26 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../../navigation/types";
 import { ScreenContainer } from "../../../components/ScreenContainer";
 import { colors, fontSize, radius, shadow, spacing } from "../../../theme";
+import { useLanguage } from "../../../context/LanguageContext";
+import type { StringKey } from "../../../i18n/strings";
 
 type Props = NativeStackScreenProps<RootStackParamList, "SchemeSelection">;
 
+/**
+ * Everything a farmer reads here is a translation key, not a literal string. Scheme and
+ * department names stay as they are — they're proper nouns a farmer recognises from the posters
+ * and forms already around them, and "translating" PM-KISAN would make it harder to recognise,
+ * not easier.
+ */
 interface SchemeItem {
   id: string;
+  /** Proper noun — deliberately not translated. */
   name: string;
+  /** Proper noun — deliberately not translated. */
   department: string;
-  benefit: string;
-  requestedFields: string[];
-  purpose: string;
+  benefitKey: StringKey;
+  requestedFields: StringKey[];
+  purposeKey: StringKey;
 }
 
 const MOCK_SCHEMES: SchemeItem[] = [
@@ -21,57 +31,60 @@ const MOCK_SCHEMES: SchemeItem[] = [
     id: "SCHEME-PMKISAN",
     name: "PM-KISAN Samman Nidhi",
     department: "Department of Agriculture & Farmers Welfare",
-    benefit: "Financial benefit of ₹6,000 per year in 3 equal installments",
-    requestedFields: ["Farmer ID", "Name", "Village", "District", "State", "Land Area", "Registered Crops"],
-    purpose: "Eligibility verification for direct income support scheme",
+    benefitKey: "schemeBenefitPmKisan",
+    requestedFields: [
+      "fieldFarmerId", "fieldName", "fieldVillage", "fieldDistrict",
+      "fieldState", "fieldLandArea", "fieldCrops",
+    ],
+    purposeKey: "schemePurposePmKisan",
   },
   {
     id: "SCHEME-PMFBY",
-    name: "Pradhan Mantri Fasal Bima Yojana (PMFBY)",
+    name: "Pradhan Mantri Fasal Bima Yojana",
     department: "Ministry of Agriculture",
-    benefit: "Crop insurance coverage against localized natural calamities",
-    requestedFields: ["Farmer ID", "Name", "District", "Land Area", "Registered Crops"],
-    purpose: "Verification of crop insurance coverage and land details",
+    benefitKey: "schemeBenefitPmfby",
+    requestedFields: ["fieldFarmerId", "fieldName", "fieldDistrict", "fieldLandArea", "fieldCrops"],
+    purposeKey: "schemePurposePmfby",
   },
   {
     id: "SCHEME-FERTILIZER",
     name: "Subsidized Fertilizer Allocation Scheme",
     department: "Department of Fertilizers",
-    benefit: "Direct allocation quota for urea & DAP at subsidized rates",
-    requestedFields: ["Farmer ID", "Name", "District", "Land Area"],
-    purpose: "Quota calculation for subsidized fertilizer distribution",
+    benefitKey: "schemeBenefitFertilizer",
+    requestedFields: ["fieldFarmerId", "fieldName", "fieldDistrict", "fieldLandArea"],
+    purposeKey: "schemePurposeFertilizer",
   },
 ];
 
 export function SchemeSelectionScreen({ navigation }: Props) {
+  const { t } = useLanguage();
+
   const onSelectScheme = (scheme: SchemeItem) => {
     navigation.navigate("ConsentScreen", {
       schemeId: scheme.id,
       schemeName: scheme.name,
       requestedFields: scheme.requestedFields,
-      purpose: scheme.purpose,
+      purposeKey: scheme.purposeKey,
     });
   };
 
   return (
     <ScreenContainer showHome={true}>
-      <Text style={styles.title}>Available Government Schemes</Text>
-      <Text style={styles.subtitle}>
-        Select a scheme to initiate application through connected services.
-      </Text>
+      <Text style={styles.title}>{t("schemeListTitle")}</Text>
+      <Text style={styles.subtitle}>{t("schemeListSubtitle")}</Text>
 
       <ScrollView contentContainerStyle={styles.list}>
         {MOCK_SCHEMES.map((scheme) => (
           <View key={scheme.id} style={styles.card}>
             <Text style={styles.dept}>{scheme.department}</Text>
             <Text style={styles.schemeName}>{scheme.name}</Text>
-            <Text style={styles.benefit}>🎁 {scheme.benefit}</Text>
+            <Text style={styles.benefit}>🎁 {t(scheme.benefitKey)}</Text>
 
             <Pressable
               style={({ pressed }) => [styles.applyBtn, pressed && styles.pressed]}
               onPress={() => onSelectScheme(scheme)}
             >
-              <Text style={styles.applyBtnText}>Apply Now →</Text>
+              <Text style={styles.applyBtnText}>{t("schemeApplyNow")}</Text>
             </Pressable>
           </View>
         ))}
@@ -131,7 +144,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   applyBtnText: {
-    color: "#FFFFFF",
+    color: colors.white,
     fontWeight: "700",
     fontSize: fontSize.body,
   },

@@ -2,6 +2,7 @@
  * Payment-date helpers, kept free of any firebase import so scripts/seed.ts can use the exact
  * same logic as the app. Re-exported from src/services/firestoreService.ts.
  */
+import { localDateOffset } from "./localDate";
 
 /**
  * How many days after acceptance the farmer is told to expect the money.
@@ -18,13 +19,11 @@ export const PAYMENT_SETTLEMENT_DAYS = 3;
  *
  * Deliberately not toISOString().slice(0, 10) — that converts to UTC first, which in IST (UTC+5:30)
  * silently reports the *previous* day for anything before 05:30, so a payment accepted at 9am
- * would promise a date one day early.
+ * would promise a date one day early. See src/utils/localDate.ts, which every date in the app
+ * now goes through for exactly this reason.
  */
 export function expectedPaymentDate(from: Date, days: number = PAYMENT_SETTLEMENT_DAYS): string {
-  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() + days);
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${month}-${day}`;
+  return localDateOffset(days, from);
 }
 
 /**

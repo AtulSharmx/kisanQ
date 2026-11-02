@@ -29,6 +29,7 @@ import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { BUILT_IN_COMMODITIES } from "../src/data/commodities";
+import { todayLocal } from "../src/utils/localDate";
 
 const serviceAccountPath = join(__dirname, "..", "serviceAccountKey.json");
 
@@ -48,7 +49,9 @@ try {
 initializeApp({ credential: cert(serviceAccount as never) });
 const db = getFirestore();
 
-const today = new Date().toISOString().slice(0, 10);
+// Local calendar date — must match seed.ts and the app, or reset targets the wrong day's
+// counters (src/utils/localDate.ts).
+const today = todayLocal();
 
 // --- Fixed IDs scripts/seed.ts creates, mirrored exactly so we never delete seed data. ---
 const CENTRE_IDS = ["centre-ksn", "centre-pnp", "centre-snp"];

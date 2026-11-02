@@ -5,6 +5,8 @@ import type { RootStackParamList } from "../../../navigation/types";
 import { ScreenContainer } from "../../../components/ScreenContainer";
 import { colors, fontSize, radius, shadow, spacing } from "../../../theme";
 import { useFarmer } from "../../../context/FarmerContext";
+import { useLanguage } from "../../../context/LanguageContext";
+import type { StringKey } from "../../../i18n/strings";
 import { listenInteropApplicationsForFarmer } from "../../../interop/interopFirestoreService";
 import type { ApplicationStatus, InteropApplication } from "../../../types/interop";
 import { ProcurementConnector, type LinkedProcurementSummary } from "../../../interop/connectors/ProcurementConnector";
@@ -12,25 +14,22 @@ import { generateCorrelationId } from "../../../interop/connectors/baseConnector
 
 type Props = NativeStackScreenProps<RootStackParamList, "MyApplications">;
 
-function getStatusBadgeStyle(status: ApplicationStatus) {
-  switch (status) {
-    case "APPROVED":
-      return { bg: "#E8F5E9", text: "#2E7D32", label: "Approved" };
-    case "UNDER_REVIEW":
-      return { bg: "#FFF8E1", text: "#F57F17", label: "Under Review" };
-    case "PENDING":
-      return { bg: "#E3F2FD", text: "#1565C0", label: "Pending" };
-    case "REJECTED":
-      return { bg: "#FFEBEE", text: "#C62828", label: "Rejected" };
-    case "DOCUMENTS_REQUIRED":
-      return { bg: "#EDE7F6", text: "#512DA8", label: "Docs Required" };
-    default:
-      return { bg: "#ECEFF1", text: "#37474F", label: status };
-  }
-}
+/**
+ * Status chip colours come from the theme (green = settled, mustard = in progress, red =
+ * refused, neutral = waiting) and every chip carries a word as well, never colour alone —
+ * design principle 4.
+ */
+const STATUS_STYLE: Record<ApplicationStatus, { bg: string; text: string; labelKey: StringKey }> = {
+  APPROVED: { bg: colors.primaryTint, text: colors.primary, labelKey: "appStatusApproved" },
+  UNDER_REVIEW: { bg: colors.accentTint, text: colors.accent, labelKey: "appStatusUnderReview" },
+  PENDING: { bg: colors.background, text: colors.textMuted, labelKey: "appStatusPending" },
+  REJECTED: { bg: colors.errorTint, text: colors.error, labelKey: "appStatusRejected" },
+  DOCUMENTS_REQUIRED: { bg: colors.accentTint, text: colors.accent, labelKey: "appStatusDocsRequired" },
+};
 
 export function MyApplicationsScreen({ navigation }: Props) {
   const { farmerId } = useFarmer();
+  const { t } = useLanguage();
   const [apps, setApps] = useState<(InteropApplication & { id: string })[]>([]);
   const [procurementSummary, setProcurementSummary] = useState<LinkedProcurementSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,58 +59,62 @@ export function MyApplicationsScreen({ navigation }: Props) {
 
   return (
     <ScreenContainer showHome={true}>
-      <Text style={styles.title}>Unified Application Tracking</Text>
+      <Text style={styles.title}>{t("myApplicationsTitle")}</Text>
 
       {loading ? (
         <ActivityIndicator style={styles.loader} color={colors.primary} size="large" />
       ) : (
         <ScrollView contentContainerStyle={styles.list}>
           {/* Section 1: Connected Government Schemes */}
-          <Text style={styles.sectionTitle}>🏛️ Government Scheme Applications</Text>
+          <Text style={styles.sectionTitle}>🏛️ {t("appsSchemeSection")}</Text>
 
           {apps.length === 0 ? (
             <View style={styles.emptyBox}>
-              <Text style={styles.emptyText}>No active scheme applications found.</Text>
+              <Text style={styles.emptyText}>{t("appsNoApps")}</Text>
             </View>
           ) : (
             apps.map((app) => {
-              const badge = getStatusBadgeStyle(app.status);
+              const badge = STATUS_STYLE[app.status] ?? STATUS_STYLE.PENDING;
               return (
                 <View key={app.id || app.externalApplicationId} style={styles.card}>
                   <View style={styles.cardHeader}>
                     <Text style={styles.serviceName}>{app.service}</Text>
                     <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-                      <Text style={[styles.badgeText, { color: badge.text }]}>● {badge.label}</Text>
+                      <Text style={[styles.badgeText, { color: badge.text }]}>
+                        ● {t(badge.labelKey)}
+                      </Text>
                     </View>
                   </View>
 
                   <Text style={styles.schemeName}>{app.schemeName}</Text>
-                  <Text style={styles.appIdText}>Application ID: {app.externalApplicationId}</Text>
-                  <Text style={styles.corrText}>Correlation ID: {app.correlationId}</Text>
+                  <Text style={styles.appIdText}>
+                    {t("appsApplicationNumber")}: {app.externalApplicationId}
+                  </Text>
                 </View>
               );
             })
           )}
 
           {/* Section 2: Linked KisanQ Mandi Procurement */}
-          <Text style={[styles.sectionTitle, styles.secMargin]}>🌾 KisanQ Mandi Procurement</Text>
+          <Text style={[styles.sectionTitle, styles.secMargin]}>🌾 {t("appsProcurementSection")}</Text>
           {procurementSummary && procurementSummary.hasBooking ? (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <Text style={styles.serviceName}>KisanQ Procurement System</Text>
-                <View style={[styles.badge, { backgroundColor: "#E8F5E9" }]}>
-                  <Text style={[styles.badgeText, { color: "#2E7D32" }]}>
-                    ● {procurementSummary.status?.toUpperCase() || "ACTIVE"}
+                <Text style={styles.serviceName}>{t("appsProcurementSection")}</Text>
+                <View style={[styles.badge, { backgroundColor: colors.primaryTint }]}>
+                  <Text style={[styles.badgeText, { color: colors.primary }]}>
+                    ● {t("consentStatusActive")}
                   </Text>
                 </View>
               </View>
-              <Text style={styles.schemeName}>Mandi Slot Procurement</Text>
-              <Text style={styles.appIdText}>Token Number: {procurementSummary.tokenNumber}</Text>
-              <Text style={styles.corrText}>Centre: {procurementSummary.centreName}</Text>
+              <Text style={styles.schemeName}>{t("appsMandiSlot")}</Text>
+              <Text style={styles.appIdText}>
+                {t("operatorTokenLabel")}: {procurementSummary.tokenNumber}
+              </Text>
             </View>
           ) : (
             <View style={styles.emptyBox}>
-              <Text style={styles.emptyText}>No active procurement booking in KisanQ.</Text>
+              <Text style={styles.emptyText}>{t("appsNoProcurement")}</Text>
             </View>
           )}
         </ScrollView>

@@ -13,13 +13,11 @@ export function GovernmentServicesScreen({ navigation }: Props) {
 
   return (
     <ScreenContainer showHome={true}>
-      <Text style={styles.title}>{t("govServicesTitle") || "Connected Government Services"}</Text>
+      <Text style={styles.title}>{t("govServicesTitle")}</Text>
       
       <View style={styles.banner}>
-        <Text style={styles.bannerBadge}>PROTOTYPE</Text>
-        <Text style={styles.bannerText}>
-          MOCK GOVERNMENT SYSTEM — PROTOTYPE ONLY
-        </Text>
+        <Text style={styles.bannerBadge}>{t("govPrototypeBadge")}</Text>
+        <Text style={styles.bannerText}>{t("govPrototypeNotice")}</Text>
       </View>
 
       <View style={styles.quickNavRow}>
@@ -27,13 +25,13 @@ export function GovernmentServicesScreen({ navigation }: Props) {
           style={({ pressed }) => [styles.quickNavBtn, pressed && styles.pressed]}
           onPress={() => navigation.navigate("MyApplications")}
         >
-          <Text style={styles.quickNavBtnText}>📋 {t("myApplicationsTitle") || "My Applications"}</Text>
+          <Text style={styles.quickNavBtnText}>📋 {t("myApplicationsTitle")}</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.quickNavBtn, pressed && styles.pressed]}
           onPress={() => navigation.navigate("MyConsents")}
         >
-          <Text style={styles.quickNavBtnText}>🛡️ {t("myConsentsTitle") || "My Consents"}</Text>
+          <Text style={styles.quickNavBtnText}>🛡️ {t("myConsentsTitle")}</Text>
         </Pressable>
       </View>
 
@@ -43,18 +41,16 @@ export function GovernmentServicesScreen({ navigation }: Props) {
           <View style={styles.cardHeader}>
             <Text style={styles.cardIcon}>🏛️</Text>
             <View style={styles.cardTitleCol}>
-              <Text style={styles.cardTitle}>Scheme Portal</Text>
-              <Text style={styles.cardSub}>Government Subsidies & Benefits</Text>
+              <Text style={styles.cardTitle}>{t("govSchemePortal")}</Text>
+              <Text style={styles.cardSub}>{t("govSchemePortalSub")}</Text>
             </View>
           </View>
-          <Text style={styles.cardDesc}>
-            Apply for agricultural schemes, income support, and crop insurance through verified data sharing.
-          </Text>
+          <Text style={styles.cardDesc}>{t("govSchemePortalDesc")}</Text>
           <Pressable
             style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}
             onPress={() => navigation.navigate("SchemeSelection", { schemeId: "", schemeName: "" })}
           >
-            <Text style={styles.actionBtnText}>Browse Schemes →</Text>
+            <Text style={styles.actionBtnText}>{t("govBrowseSchemes")}</Text>
           </Pressable>
         </View>
 
@@ -63,15 +59,13 @@ export function GovernmentServicesScreen({ navigation }: Props) {
           <View style={styles.cardHeader}>
             <Text style={styles.cardIcon}>👤</Text>
             <View style={styles.cardTitleCol}>
-              <Text style={styles.cardTitle}>Farmer Registry</Text>
-              <Text style={styles.cardSub}>Verified Identity & Land Records</Text>
+              <Text style={styles.cardTitle}>{t("govFarmerRegistry")}</Text>
+              <Text style={styles.cardSub}>{t("govFarmerRegistrySub")}</Text>
             </View>
           </View>
-          <Text style={styles.cardDesc}>
-            Demonstrates interoperability with state farmer databases for automated eligibility checks.
-          </Text>
+          <Text style={styles.cardDesc}>{t("govFarmerRegistryDesc")}</Text>
           <View style={styles.statusChip}>
-            <Text style={styles.statusChipText}>● Connected (Mock)</Text>
+            <Text style={styles.statusChipText}>{t("govConnectedMock")}</Text>
           </View>
         </View>
 
@@ -80,18 +74,16 @@ export function GovernmentServicesScreen({ navigation }: Props) {
           <View style={styles.cardHeader}>
             <Text style={styles.cardIcon}>🌾</Text>
             <View style={styles.cardTitleCol}>
-              <Text style={styles.cardTitle}>Procurement Interop</Text>
-              <Text style={styles.cardSub}>Linked Mandi Status</Text>
+              <Text style={styles.cardTitle}>{t("govProcurementInterop")}</Text>
+              <Text style={styles.cardSub}>{t("govProcurementInteropSub")}</Text>
             </View>
           </View>
-          <Text style={styles.cardDesc}>
-            Exchanges procurement status with central department systems for unified tracking.
-          </Text>
+          <Text style={styles.cardDesc}>{t("govProcurementInteropDesc")}</Text>
           <Pressable
             style={({ pressed }) => [styles.actionBtnOutline, pressed && styles.pressed]}
             onPress={() => navigation.navigate("MyApplications")}
           >
-            <Text style={styles.actionBtnOutlineText}>View Unified Status →</Text>
+            <Text style={styles.actionBtnOutlineText}>{t("govViewUnifiedStatus")}</Text>
           </Pressable>
         </View>
       </View>
@@ -107,8 +99,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   banner: {
-    backgroundColor: "#FFF8E1",
-    borderColor: "#FFE082",
+    backgroundColor: colors.accentTint,
+    borderColor: colors.accent,
     borderWidth: 1,
     borderRadius: radius.sm,
     padding: spacing.sm,
@@ -121,7 +113,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "900",
     backgroundColor: colors.accent,
-    color: "#000",
+    color: colors.text,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -129,7 +121,7 @@ const styles = StyleSheet.create({
   bannerText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#8F6B00",
+    color: colors.text,
     flex: 1,
   },
   quickNavRow: {
@@ -198,7 +190,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   actionBtnText: {
-    color: "#FFFFFF",
+    color: colors.white,
     fontWeight: "700",
     fontSize: fontSize.body,
   },
@@ -217,7 +209,7 @@ const styles = StyleSheet.create({
   },
   statusChip: {
     alignSelf: "flex-start",
-    backgroundColor: "#E8F5E9",
+    backgroundColor: colors.primaryTint,
     borderRadius: radius.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,

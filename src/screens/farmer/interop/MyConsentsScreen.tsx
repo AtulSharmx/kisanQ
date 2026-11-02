@@ -5,14 +5,25 @@ import type { RootStackParamList } from "../../../navigation/types";
 import { ScreenContainer } from "../../../components/ScreenContainer";
 import { colors, fontSize, radius, shadow, spacing } from "../../../theme";
 import { useFarmer } from "../../../context/FarmerContext";
+import { useLanguage } from "../../../context/LanguageContext";
+import { tryT } from "../../../i18n/strings";
 import { listenConsentsForFarmer, revokeConsent } from "../../../interop/interopFirestoreService";
 import { generateCorrelationId } from "../../../interop/connectors/baseConnector";
-import type { Consent } from "../../../types/interop";
+import type { Consent, ConsentStatus } from "../../../types/interop";
+import type { StringKey } from "../../../i18n/strings";
 
 type Props = NativeStackScreenProps<RootStackParamList, "MyConsents">;
 
+const STATUS_LABEL: Record<ConsentStatus, StringKey> = {
+  ACTIVE: "consentStatusActive",
+  REVOKED: "consentStatusRevoked",
+  EXPIRED: "consentStatusExpired",
+  DENIED: "consentStatusDenied",
+};
+
 export function MyConsentsScreen({ navigation }: Props) {
   const { farmerId } = useFarmer();
+  const { t, lang } = useLanguage();
   const [consents, setConsents] = useState<(Consent & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -45,10 +56,10 @@ export function MyConsentsScreen({ navigation }: Props) {
             try {
               const correlationId = generateCorrelationId();
               await revokeConsent(consent.id, farmerId, correlationId);
-              Alert.alert("Consent Revoked", "Data sharing permission has been revoked.");
+              Alert.alert(t("consentsRevokedTitle"), t("consentStatusRevoked"));
             } catch (err) {
-              const msg = err instanceof Error ? err.message : "Failed to revoke consent";
-              Alert.alert("Error", msg);
+              console.error(err);
+              Alert.alert(t("consentsRevokedTitle"), t("saveFailed"));
             }
           },
         },
@@ -58,13 +69,13 @@ export function MyConsentsScreen({ navigation }: Props) {
 
   return (
     <ScreenContainer showHome={true}>
-      <Text style={styles.title}>My Granted Consents</Text>
+      <Text style={styles.title}>{t("myConsentsTitle")}</Text>
 
       {loading ? (
         <ActivityIndicator style={styles.loader} color={colors.primary} size="large" />
       ) : consents.length === 0 ? (
         <View style={styles.emptyBox}>
-          <Text style={styles.emptyText}>No active data sharing consents granted.</Text>
+          <Text style={styles.emptyText}>{t("consentsEmpty")}</Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.list}>
@@ -75,25 +86,32 @@ export function MyConsentsScreen({ navigation }: Props) {
                 <View
                   style={[
                     styles.badge,
-                    { backgroundColor: item.status === "ACTIVE" ? "#E8F5E9" : "#FFEBEE" },
+                    {
+                      backgroundColor:
+                        item.status === "ACTIVE" ? colors.primaryTint : colors.errorTint,
+                    },
                   ]}
                 >
                   <Text
                     style={[
                       styles.badgeText,
-                      { color: item.status === "ACTIVE" ? "#2E7D32" : "#C62828" },
+                      { color: item.status === "ACTIVE" ? colors.primary : colors.error },
                     ]}
                   >
-                    ● {item.status}
+                    ● {t(STATUS_LABEL[item.status] ?? "consentStatusActive")}
                   </Text>
                 </View>
               </View>
 
-              <Text style={styles.purposeText}>Purpose: {item.purpose}</Text>
+              <Text style={styles.purposeText}>
+                {t("consentPurposeLabel")}: {tryT(item.purpose, lang)}
+              </Text>
 
-              <Text style={styles.fieldsHeader}>Shared Data Fields:</Text>
+              <Text style={styles.fieldsHeader}>{t("consentsSharedFields")}</Text>
               <Text style={styles.fieldsText}>
-                {Array.isArray(item.requestedDataFields) ? item.requestedDataFields.join(", ") : ""}
+                {Array.isArray(item.requestedDataFields)
+                  ? item.requestedDataFields.map((f) => tryT(f, lang)).join(", ")
+                  : ""}
               </Text>
 
               {item.status === "ACTIVE" && (
@@ -101,7 +119,7 @@ export function MyConsentsScreen({ navigation }: Props) {
                   style={({ pressed }) => [styles.revokeBtn, pressed && styles.pressed]}
                   onPress={() => onRevoke(item)}
                 >
-                  <Text style={styles.revokeBtnText}>REVOKE CONSENT</Text>
+                  <Text style={styles.revokeBtnText}>{t("consentsRevokeBtn")}</Text>
                 </Pressable>
               )}
             </View>

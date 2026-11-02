@@ -34,6 +34,7 @@ const ADMIN_PATHS = {
   AdminPayments: "admin/payments",
   AdminObjections: "admin/objections",
   AdminSmsLog: "admin/sms-log",
+  AdminIntegration: "admin/integration",
 } as const;
 
 const OPERATOR_PATHS = {

@@ -4,6 +4,9 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { OperatorStackParamList } from "../../navigation/operatorTypes";
 import { colors, fontSize, radius, shadow, spacing } from "../../theme";
 import { useOperator } from "../../context/OperatorContext";
+import { useLanguage } from "../../context/LanguageContext";
+import { OperatorHeader } from "../../components/OperatorHeader";
+import type { StringKey } from "../../i18n/strings";
 import {
   advanceMockGovApplicationStatus,
   listenAuditLogs,
@@ -13,16 +16,32 @@ import type { AuditLog, MockGovSchemeApplication } from "../../types/interop";
 
 type Props = NativeStackScreenProps<OperatorStackParamList, "AdminIntegration">;
 
+type Health = "HEALTHY" | "DEGRADED" | "DOWN";
+
 interface DerivedSystemStats {
   serviceName: string;
   totalRequests: number;
   successCount: number;
   failureCount: number;
-  health: "HEALTHY" | "DEGRADED" | "DOWN";
+  health: Health;
 }
+
+const HEALTH_LABEL: Record<Health, StringKey> = {
+  HEALTHY: "adminHealthHealthy",
+  DEGRADED: "adminHealthDegraded",
+  DOWN: "adminHealthDown",
+};
+
+/** Theme tones, and always paired with a word — never colour alone (design principle 4). */
+const HEALTH_TONE: Record<Health, { bg: string; text: string }> = {
+  HEALTHY: { bg: colors.primaryTint, text: colors.primary },
+  DEGRADED: { bg: colors.accentTint, text: colors.accent },
+  DOWN: { bg: colors.errorTint, text: colors.error },
+};
 
 export function AdminIntegrationScreen({ navigation }: Props) {
   const { staffName } = useOperator();
+  const { t } = useLanguage();
   const [logs, setLogs] = useState<(AuditLog & { id: string })[]>([]);
   const [mockApps, setMockApps] = useState<(MockGovSchemeApplication & { id: string })[]>([]);
   const [advancingId, setAdvancingId] = useState<string | null>(null);
@@ -41,11 +60,21 @@ export function AdminIntegrationScreen({ navigation }: Props) {
     const services = ["Farmer Registry", "Scheme Portal", "Procurement System"];
     return services.map((serviceName) => {
       const serviceLogs = logs.filter((l) => l.requestingService === serviceName);
-      const totalRequests = serviceLogs.filter((l) => l.eventType === "API_REQUEST" || l.eventType === "RETRY").length;
-      const successCount = serviceLogs.filter((l) => l.result === "SUCCESS").length;
-      const failureCount = serviceLogs.filter((l) => l.result === "FAILURE").length;
+      // One "request" is an attempt: the first API_REQUEST plus any RETRY. Successes and
+      // failures are counted over the *same* set of events, not over every log line for the
+      // service — mixing the two denominators let a failure ratio exceed 1 as soon as a
+      // consent event (which is not an attempt) landed in the log.
+      const attempts = serviceLogs.filter(
+        (l) => l.eventType === "API_REQUEST" || l.eventType === "RETRY" ||
+               l.eventType === "API_RESPONSE" || l.eventType === "API_FAILURE"
+      );
+      const totalRequests = attempts.filter(
+        (l) => l.eventType === "API_REQUEST" || l.eventType === "RETRY"
+      ).length;
+      const successCount = attempts.filter((l) => l.result === "SUCCESS").length;
+      const failureCount = attempts.filter((l) => l.result === "FAILURE").length;
 
-      let health: "HEALTHY" | "DEGRADED" | "DOWN" = "HEALTHY";
+      let health: Health = "HEALTHY";
       if (totalRequests > 0) {
         const failureRatio = failureCount / totalRequests;
         if (failureRatio >= 0.3) health = "DOWN";
@@ -77,80 +106,51 @@ export function AdminIntegrationScreen({ navigation }: Props) {
 
   return (
     <View style={styles.screen}>
-      {/* Header — matching AdminOverview style */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerAppName}>KisanQ — Interoperability Dashboard</Text>
-          <Text style={styles.headerStaffName}>Logged in as: {staffName}</Text>
-        </View>
-
-        <View style={styles.headerActions}>
-          <Pressable
-            onPress={() => navigation.navigate("AdminOverview")}
-            style={({ pressed }) => [styles.headerChip, pressed && styles.pressed]}
-          >
-            <Text style={styles.headerChipText}>📊 Overview</Text>
-          </Pressable>
-        </View>
-      </View>
+      <OperatorHeader
+        title={t("adminIntegrationTitle")}
+        staffName={staffName}
+        actions={[
+          {
+            icon: "←",
+            label: t("backToOverview"),
+            onPress: () => navigation.navigate("AdminOverview"),
+          },
+        ]}
+      />
 
       <ScrollView contentContainerStyle={styles.content}>
         {/* Banner */}
         <View style={styles.protoBanner}>
-          <Text style={styles.protoBannerTitle}>MOCK GOVERNMENT SYSTEM — PROTOTYPE ONLY</Text>
-          <Text style={styles.protoBannerDesc}>
-            Demonstrating API interoperability layer, consent management, unified application tracking, and real-time cross-platform state synchronization.
-          </Text>
+          <Text style={styles.protoBannerTitle}>{t("govPrototypeNotice")}</Text>
+          <Text style={styles.protoBannerDesc}>{t("adminIntegrationBannerDesc")}</Text>
         </View>
 
         {/* Section 1: Connected Systems Health */}
-        <Text style={styles.sectionTitle}>🔗 Connected Government Systems</Text>
+        <Text style={styles.sectionTitle}>🔗 {t("adminConnectedSystems")}</Text>
         <View style={styles.systemsGrid}>
           {systemStats.map((sys) => (
             <View key={sys.serviceName} style={styles.sysCard}>
               <View style={styles.sysCardHeader}>
                 <Text style={styles.sysName}>{sys.serviceName}</Text>
                 <View
-                  style={[
-                    styles.healthChip,
-                    {
-                      backgroundColor:
-                        sys.health === "HEALTHY"
-                          ? "#E8F5E9"
-                          : sys.health === "DEGRADED"
-                          ? "#FFF8E1"
-                          : "#FFEBEE",
-                    },
-                  ]}
+                  style={[styles.healthChip, { backgroundColor: HEALTH_TONE[sys.health].bg }]}
                 >
-                  <Text
-                    style={[
-                      styles.healthChipText,
-                      {
-                        color:
-                          sys.health === "HEALTHY"
-                            ? "#2E7D32"
-                            : sys.health === "DEGRADED"
-                            ? "#F57F17"
-                            : "#C62828",
-                      },
-                    ]}
-                  >
-                    ● {sys.health}
+                  <Text style={[styles.healthChipText, { color: HEALTH_TONE[sys.health].text }]}>
+                    ● {t(HEALTH_LABEL[sys.health])}
                   </Text>
                 </View>
               </View>
 
               <View style={styles.statRow}>
-                <Text style={styles.statLabel}>Total Requests:</Text>
+                <Text style={styles.statLabel}>{t("adminTotalRequests")}</Text>
                 <Text style={styles.statVal}>{sys.totalRequests}</Text>
               </View>
               <View style={styles.statRow}>
-                <Text style={styles.statLabel}>Successful:</Text>
-                <Text style={[styles.statVal, { color: "#2E7D32" }]}>{sys.successCount}</Text>
+                <Text style={styles.statLabel}>{t("adminSuccessful")}</Text>
+                <Text style={[styles.statVal, { color: colors.primary }]}>{sys.successCount}</Text>
               </View>
               <View style={styles.statRow}>
-                <Text style={styles.statLabel}>Failed:</Text>
+                <Text style={styles.statLabel}>{t("adminFailed")}</Text>
                 <Text style={[styles.statVal, { color: colors.error }]}>{sys.failureCount}</Text>
               </View>
             </View>
@@ -158,16 +158,12 @@ export function AdminIntegrationScreen({ navigation }: Props) {
         </View>
 
         {/* Section 2: Active Demo Applications (Cross-runtime Synchronization) */}
-        <Text style={[styles.sectionTitle, styles.secMargin]}>
-          ⚡ Demo Control — Government Scheme Applications
-        </Text>
-        <Text style={styles.subHint}>
-          Advance status here to demonstrate real-time mobile app notification and status synchronization.
-        </Text>
+        <Text style={[styles.sectionTitle, styles.secMargin]}>⚡ {t("adminDemoControl")}</Text>
+        <Text style={styles.subHint}>{t("adminDemoControlHint")}</Text>
 
         {mockApps.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No applications submitted yet. Apply for a scheme in the Farmer mobile app to test.</Text>
+            <Text style={styles.emptyText}>{t("adminNoGovApps")}</Text>
           </View>
         ) : (
           <View style={styles.appsList}>
@@ -181,7 +177,7 @@ export function AdminIntegrationScreen({ navigation }: Props) {
                   </View>
 
                   <View style={styles.appStatusBox}>
-                    <Text style={styles.statusCurrent}>Status: {app.status}</Text>
+                    <Text style={styles.statusCurrent}>{app.status}</Text>
                     {app.status !== "APPROVED" && (
                       <Pressable
                         style={({ pressed }) => [styles.advanceBtn, pressed && styles.pressed]}
@@ -189,9 +185,9 @@ export function AdminIntegrationScreen({ navigation }: Props) {
                         disabled={advancingId === app.id}
                       >
                         {advancingId === app.id ? (
-                          <ActivityIndicator color="#FFF" size="small" />
+                          <ActivityIndicator color={colors.white} size="small" />
                         ) : (
-                          <Text style={styles.advanceBtnText}>Advance Status →</Text>
+                          <Text style={styles.advanceBtnText}>{t("adminAdvanceStatusBtn")}</Text>
                         )}
                       </Pressable>
                     )}
@@ -203,10 +199,10 @@ export function AdminIntegrationScreen({ navigation }: Props) {
         )}
 
         {/* Section 3: Interoperability Audit Log */}
-        <Text style={[styles.sectionTitle, styles.secMargin]}>📜 Interoperability Audit Log</Text>
+        <Text style={[styles.sectionTitle, styles.secMargin]}>📜 {t("adminAuditLog")}</Text>
         <View style={styles.logTable}>
           {logs.length === 0 ? (
-            <Text style={styles.emptyText}>No audit entries recorded yet.</Text>
+            <Text style={styles.emptyText}>{t("adminNoAuditEntries")}</Text>
           ) : (
             logs.slice(0, 20).map((log) => (
               <View key={log.id} style={styles.logRow}>
@@ -216,13 +212,16 @@ export function AdminIntegrationScreen({ navigation }: Props) {
                 <View
                   style={[
                     styles.logResChip,
-                    { backgroundColor: log.result === "SUCCESS" ? "#E8F5E9" : "#FFEBEE" },
+                    {
+                      backgroundColor:
+                        log.result === "SUCCESS" ? colors.primaryTint : colors.errorTint,
+                    },
                   ]}
                 >
                   <Text
                     style={[
                       styles.logResText,
-                      { color: log.result === "SUCCESS" ? "#2E7D32" : "#C62828" },
+                      { color: log.result === "SUCCESS" ? colors.primary : colors.error },
                     ]}
                   >
                     {log.result}
@@ -239,31 +238,6 @@ export function AdminIntegrationScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  headerAppName: { fontSize: fontSize.label, fontWeight: "800", color: colors.primary },
-  headerStaffName: { fontSize: fontSize.body, color: colors.textMuted, marginTop: 2 },
-  headerActions: { flexDirection: "row", gap: spacing.sm },
-  headerChip: {
-    minHeight: 40,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerChipText: { color: colors.primary, fontWeight: "700", fontSize: fontSize.body },
   content: {
     padding: spacing.lg,
     maxWidth: 900,
@@ -272,14 +246,14 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   protoBanner: {
-    backgroundColor: "#FFF8E1",
-    borderColor: "#FFE082",
+    backgroundColor: colors.accentTint,
+    borderColor: colors.accent,
     borderWidth: 1,
     borderRadius: radius.md,
     padding: spacing.md,
   },
-  protoBannerTitle: { fontSize: fontSize.label, fontWeight: "800", color: "#8F6B00", marginBottom: 2 },
-  protoBannerDesc: { fontSize: 13, color: "#5D4037" },
+  protoBannerTitle: { fontSize: fontSize.label, fontWeight: "800", color: colors.text, marginBottom: 2 },
+  protoBannerDesc: { fontSize: 13, color: colors.textMuted },
   sectionTitle: { fontSize: fontSize.label, fontWeight: "800", color: colors.text },
   secMargin: { marginTop: spacing.md },
   subHint: { fontSize: 13, color: colors.textMuted, marginTop: -spacing.xs, marginBottom: spacing.xs },
@@ -313,7 +287,7 @@ const styles = StyleSheet.create({
   appStatusBox: { alignItems: "flex-end", gap: 6 },
   statusCurrent: { fontSize: 13, fontWeight: "700", color: colors.text },
   advanceBtn: { backgroundColor: colors.primary, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
-  advanceBtnText: { color: "#FFF", fontWeight: "700", fontSize: 13 },
+  advanceBtnText: { color: colors.white, fontWeight: "700", fontSize: 13 },
   logTable: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: radius.md, padding: spacing.sm, gap: 4 },
   logRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: colors.background },
   logCorr: { fontSize: 12, fontWeight: "700", color: colors.textMuted, width: 140 },

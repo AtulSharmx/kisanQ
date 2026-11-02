@@ -29,6 +29,7 @@ import {
   type NotificationText,
 } from "../src/services/notificationText";
 import { maskMobile } from "../src/utils/maskMobile";
+import { localDateOffset, todayLocal } from "../src/utils/localDate";
 
 // Matches src/services/pinAuth.ts (plain SHA-256, no salt — good enough to keep PINs out of
 // plaintext in a prototype, not a production-grade credential store).
@@ -54,7 +55,9 @@ try {
 initializeApp({ credential: cert(serviceAccount as never) });
 const db = getFirestore();
 
-const today = new Date().toISOString().slice(0, 10);
+// Local calendar date, matching the app exactly (src/utils/localDate.ts) — a UTC-derived
+// "today" seeds the wrong day's slots when run before 05:30 IST.
+const today = todayLocal();
 
 async function seed() {
   console.log("Seeding centres...");
@@ -149,11 +152,7 @@ async function seed() {
   // for all three, not just today. Offset 0 keeps today's original slot IDs (`{centre}-slot-{i}`)
   // for backward compatibility with scripts/reset.ts; tomorrow/day-after get a `-d{offset}`
   // suffix so all three days' docs coexist without colliding.
-  const dateForOffset = (offset: number) => {
-    const d = new Date();
-    d.setDate(d.getDate() + offset);
-    return d.toISOString().slice(0, 10);
-  };
+  const dateForOffset = (offset: number) => localDateOffset(offset);
   const slotIds: Record<string, string[]> = {};
   for (const centre of centres) {
     slotIds[centre.id] = [];

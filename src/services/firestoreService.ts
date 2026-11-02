@@ -18,6 +18,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
@@ -54,6 +55,7 @@ import {
   type NotificationText,
 } from "./notificationText";
 import { expectedPaymentDate } from "../utils/paymentDates";
+import { localDateOffset, todayLocal } from "../utils/localDate";
 
 export {
   PAYMENT_SETTLEMENT_DAYS,
@@ -292,13 +294,13 @@ export interface SlotWithId extends Slot {
 }
 
 /** ISO date strings for today/tomorrow/day-after — advance booking is capped at 3 days out
- * since the daily capacity model (and the demo seed data) only plans that far ahead. */
+ * since the daily capacity model (and the demo seed data) only plans that far ahead.
+ *
+ * Local calendar dates, not UTC: before 05:30 IST a UTC-derived "today" is yesterday, which put
+ * the previous day's (already-full) slots under the "आज" tab for exactly the farmers who set out
+ * before dawn. See src/utils/localDate.ts. */
 export function advanceBookingDates(): string[] {
-  return [0, 1, 2].map((offset) => {
-    const d = new Date();
-    d.setDate(d.getDate() + offset);
-    return d.toISOString().slice(0, 10);
-  });
+  return [0, 1, 2].map((offset) => localDateOffset(offset));
 }
 
 export async function listSlotsForCentreOnDate(
@@ -359,7 +361,9 @@ export async function createBooking(
   const centreRef = doc(db, COLLECTIONS.centres, input.centreId);
   const slotRef = doc(db, COLLECTIONS.slots, input.slotId);
   const bookingRef = doc(collection(db, COLLECTIONS.bookings));
-  const today = new Date().toISOString().slice(0, 10);
+  // Local calendar date — the capacity gate below compares it to slot.date, and a UTC-derived
+  // "today" never matched a today-dated slot before 05:30 IST, silently skipping the gate.
+  const today = todayLocal();
 
   const capacityRef = doc(
     db,
@@ -575,7 +579,9 @@ export async function checkInBooking(input: {
   bookingId: string;
   staffId: string;
 }): Promise<CheckInResult> {
-  const today = new Date().toISOString().slice(0, 10);
+  // Local calendar date — the queue-position counter is keyed per centre per *day*, and a
+  // UTC-derived date meant an early-morning check-in continued yesterday's position sequence.
+  const today = todayLocal();
   const bookingRef = doc(db, COLLECTIONS.bookings, input.bookingId);
   const queueRef = doc(collection(db, COLLECTIONS.queue));
 
@@ -771,6 +777,31 @@ export function listenNotifications(
     (snap) => onChange(snap.docs.map((d) => ({ id: d.id, ...(d.data() as AppNotification) }))),
     (err) => onError?.(err)
   );
+}
+
+/**
+ * Marks a farmer's own notifications read. firestore.rules allow a farmer to change nothing but
+ * `status`, and only to "read", on a notification whose farmerId is their own.
+ *
+ * Best-effort by design: this runs as a side effect of simply opening the Notifications screen,
+ * so a failure must never surface as an error over the farmer's actual notifications — the worst
+ * case is that they stay marked unread and are retried next visit.
+ */
+export async function markNotificationsRead(notificationIds: string[]): Promise<void> {
+  if (notificationIds.length === 0) return;
+  try {
+    // Firestore caps a batch at 500 writes; a farmer's unread list is far smaller, but chunking
+    // keeps that from being a latent limit nobody notices until a demo reseed piles them up.
+    for (let i = 0; i < notificationIds.length; i += 400) {
+      const batch = writeBatch(db);
+      for (const id of notificationIds.slice(i, i + 400)) {
+        batch.update(doc(db, COLLECTIONS.notifications, id), { status: "read" });
+      }
+      await batch.commit();
+    }
+  } catch (e) {
+    console.error("Could not mark notifications read", e);
+  }
 }
 
 // ---------------------------------------------------------------------------

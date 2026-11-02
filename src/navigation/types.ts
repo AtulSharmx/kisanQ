@@ -1,3 +1,5 @@
+import type { StringKey } from "../i18n/strings";
+
 export type RootStackParamList = {
   Splash: undefined;
   Aadhaar: undefined;
@@ -19,7 +21,15 @@ export type RootStackParamList = {
   ComingSoon: { titleKey: "homeMyProduce" };
   GovernmentServices: undefined;
   SchemeSelection: { schemeId: string; schemeName: string };
-  ConsentScreen: { schemeId: string; schemeName: string; requestedFields: string[]; purpose: string };
+  // `requestedFields` and `purpose` are i18n keys, not literal text: this screen is where a
+  // farmer grants permission to share their data, so what it lists has to be readable in their
+  // own language — passing English strings through navigation made that impossible.
+  ConsentScreen: {
+    schemeId: string;
+    schemeName: string;
+    requestedFields: StringKey[];
+    purposeKey: StringKey;
+  };
   MyApplications: undefined;
   MyConsents: undefined;
 };

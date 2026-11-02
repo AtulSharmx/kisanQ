@@ -5,6 +5,8 @@ import type { RootStackParamList } from "../../../navigation/types";
 import { ScreenContainer } from "../../../components/ScreenContainer";
 import { colors, fontSize, radius, shadow, spacing } from "../../../theme";
 import { useFarmer } from "../../../context/FarmerContext";
+import { useLanguage } from "../../../context/LanguageContext";
+import type { StringKey } from "../../../i18n/strings";
 import { createConsent } from "../../../interop/interopFirestoreService";
 import { logInteropEvent } from "../../../interop/auditService";
 import { generateCorrelationId } from "../../../interop/connectors/baseConnector";
@@ -13,13 +15,18 @@ import { SchemeConnector } from "../../../interop/connectors/SchemeConnector";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ConsentScreen">;
 
-const NOT_REQUESTED_FIELDS = ["Bank Account Details", "Aadhaar Full Number", "Biometric Data"];
+/**
+ * Spelled out on the screen on purpose: telling a farmer what is *not* being taken is as much a
+ * part of informed consent as listing what is. These three are never shared by any connector.
+ */
+const NOT_REQUESTED_FIELDS: StringKey[] = ["fieldBankDetails", "fieldAadhaarFull", "fieldBiometric"];
 
 export function ConsentScreen({ route, navigation }: Props) {
-  const { schemeId, schemeName, requestedFields, purpose } = route.params;
+  const { schemeId, schemeName, requestedFields, purposeKey } = route.params;
   const { farmer, farmerId } = useFarmer();
+  const { t } = useLanguage();
   const [submitting, setSubmitting] = useState(false);
-  const [statusText, setStatusText] = useState("");
+  const [statusKey, setStatusKey] = useState<StringKey | null>(null);
 
   const onDeny = async () => {
     if (!farmerId) return;
@@ -28,18 +35,20 @@ export function ConsentScreen({ route, navigation }: Props) {
       eventType: "CONSENT_DENIED",
       farmerId,
       requestingService: "Scheme Portal",
+      // Audit logs are operator/admin-facing records, so they stay in English — only what the
+      // farmer reads is translated.
       dataFields: requestedFields,
       correlationId,
       result: "FAILURE",
       errorMessage: "Farmer denied data sharing request",
     });
-    Alert.alert("Consent Denied", "You denied permission. The application was not submitted.");
+    Alert.alert(t("consentDeniedTitle"), t("consentDeniedBody"));
     navigation.goBack();
   };
 
   const onAllow = async () => {
     if (!farmerId) {
-      Alert.alert("Error", "Authentication identity missing. Please re-open the app.");
+      Alert.alert(t("consentErrorTitle"), t("saveFailed"));
       return;
     }
 
@@ -48,12 +57,14 @@ export function ConsentScreen({ route, navigation }: Props) {
 
     try {
       // 1. Create Consent Record in Firestore
-      setStatusText("Recording consent...");
+      setStatusKey("consentStepRecording");
       const consentId = await createConsent({
         farmerId,
         requestingService: "Scheme Portal",
+        // Stored as keys so the consent record can be re-rendered in whatever language the
+        // farmer is using when they later review or revoke it on My Consents.
         requestedDataFields: requestedFields,
-        purpose,
+        purpose: purposeKey,
       });
 
       await logInteropEvent({
@@ -67,7 +78,7 @@ export function ConsentScreen({ route, navigation }: Props) {
       });
 
       // 2. Call Farmer Registry Connector (uses authenticated farmer's existing profile)
-      setStatusText("Verifying identity with Farmer Registry...");
+      setStatusKey("consentStepVerifying");
       const registryConnector = new FarmerRegistryConnector();
       const commonFarmerData = await registryConnector.verifyAndFetchFarmer(
         farmerId,
@@ -77,7 +88,7 @@ export function ConsentScreen({ route, navigation }: Props) {
       );
 
       // 3. Call Scheme Connector to create government application
-      setStatusText("Submitting scheme application...");
+      setStatusKey("consentStepSubmitting");
       const schemeConnector = new SchemeConnector();
       const result = await schemeConnector.submitApplication({
         farmerData: commonFarmerData,
@@ -102,32 +113,37 @@ export function ConsentScreen({ route, navigation }: Props) {
 
   return (
     <ScreenContainer showHome={true}>
-      <Text style={styles.title}>Data Sharing Consent</Text>
+      <Text style={styles.title}>{t("consentTitle")}</Text>
 
       <View style={styles.card}>
         <Text style={styles.requestingHeadline}>
-          🏛️ <Text style={styles.bold}>Scheme Portal</Text> is requesting access to your information:
+          🏛️{" "}
+          {t("consentRequestHeadline").replace("{service}", t("govSchemePortal"))}
         </Text>
 
-        <Text style={styles.schemeLabel}>Scheme: {schemeName}</Text>
-        <Text style={styles.purposeBox}>Target Purpose: {purpose}</Text>
+        <Text style={styles.schemeLabel}>
+          {t("consentSchemeLabel")}: {schemeName}
+        </Text>
+        <Text style={styles.purposeBox}>
+          {t("consentPurposeLabel")}: {t(purposeKey)}
+        </Text>
 
-        <Text style={styles.sectionHeader}>Requested Information:</Text>
+        <Text style={styles.sectionHeader}>{t("consentRequestedInfo")}</Text>
         <View style={styles.fieldList}>
           {requestedFields.map((field) => (
             <View key={field} style={styles.fieldRow}>
               <Text style={styles.checkIcon}>✓</Text>
-              <Text style={styles.fieldText}>{field}</Text>
+              <Text style={styles.fieldText}>{t(field)}</Text>
             </View>
           ))}
         </View>
 
-        <Text style={[styles.sectionHeader, styles.notReqHeader]}>NOT Requested or Shared:</Text>
+        <Text style={[styles.sectionHeader, styles.notReqHeader]}>{t("consentNotShared")}</Text>
         <View style={styles.fieldList}>
           {NOT_REQUESTED_FIELDS.map((field) => (
             <View key={field} style={styles.fieldRow}>
               <Text style={styles.crossIcon}>✗</Text>
-              <Text style={styles.fieldNotReqText}>{field}</Text>
+              <Text style={styles.fieldNotReqText}>{t(field)}</Text>
             </View>
           ))}
         </View>
@@ -135,7 +151,7 @@ export function ConsentScreen({ route, navigation }: Props) {
         {submitting ? (
           <View style={styles.loaderBox}>
             <ActivityIndicator color={colors.primary} size="large" />
-            <Text style={styles.loaderText}>{statusText}</Text>
+            <Text style={styles.loaderText}>{statusKey ? t(statusKey) : ""}</Text>
           </View>
         ) : (
           <View style={styles.btnRow}>
@@ -143,13 +159,13 @@ export function ConsentScreen({ route, navigation }: Props) {
               style={({ pressed }) => [styles.denyBtn, pressed && styles.pressed]}
               onPress={onDeny}
             >
-              <Text style={styles.denyBtnText}>DENY</Text>
+              <Text style={styles.denyBtnText}>{t("consentDenyBtn")}</Text>
             </Pressable>
             <Pressable
               style={({ pressed }) => [styles.allowBtn, pressed && styles.pressed]}
               onPress={onAllow}
             >
-              <Text style={styles.allowBtnText}>ALLOW</Text>
+              <Text style={styles.allowBtnText}>{t("consentAllowBtn")}</Text>
             </Pressable>
           </View>
         )}
@@ -189,8 +205,8 @@ const styles = StyleSheet.create({
   },
   purposeBox: {
     fontSize: 13,
-    color: "#5D4037",
-    backgroundColor: "#EFEBE9",
+    color: colors.text,
+    backgroundColor: colors.background,
     padding: spacing.xs,
     borderRadius: radius.sm,
     marginBottom: spacing.md,
@@ -214,7 +230,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   checkIcon: {
-    color: "#2E7D32",
+    color: colors.primary,
     fontWeight: "900",
     fontSize: 16,
   },
@@ -259,7 +275,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   allowBtnText: {
-    color: "#FFFFFF",
+    color: colors.white,
     fontWeight: "800",
     fontSize: fontSize.body,
   },

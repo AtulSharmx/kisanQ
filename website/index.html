@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>KisanQ — Less waiting. More clarity.</title>
-<meta name="description" content="KisanQ makes the mandi procurement queue visible to the farmer: live queue position, weighing and grading shown as they are recorded, and a payment date instead of an open-ended wait.">
-<meta name="theme-color" content="#0F3523">
-<link rel="icon" href="assets/qr.png" sizes="any">
+<title>KisanQ — Know your turn. See your numbers.</title>
+<meta name="description" content="KisanQ lets a farmer book a procurement slot, follow the queue at the mandi, and see the weighing and quality details as they are recorded at the counter.">
+<meta name="theme-color" content="#13311F">
+<link rel="icon" href="assets/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Source+Sans+3:wght@400;500;600;700&family=Tiro+Devanagari+Hindi&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -18,384 +18,356 @@
 
 <header class="nav" id="top">
   <div class="nav-in">
-    <a class="brand" href="#top" aria-label="KisanQ home">
-      <span class="brand-mark" aria-hidden="true"></span>
-      Kisan<em>Q</em>
-    </a>
-    <nav class="nav-links" aria-label="Sections">
-      <a href="#problem">Problem</a>
-      <a href="#flow">Live flow</a>
+    <a class="brand" href="#top">Kisan<span>Q</span></a>
+
+    <nav class="nav-links" id="navmenu" aria-label="Sections">
+      <a href="#challenges">Challenges</a>
+      <a href="#how">How it works</a>
       <a href="#product">Product</a>
-      <a href="#status">What's real</a>
-      <a href="#get">Download</a>
+      <a href="#honest">What's real</a>
     </nav>
-    <a class="btn btn-sm" href="download.html">Get the app</a>
+
+    <div class="nav-end">
+      <a class="btn btn-sm" href="download.html">Download</a>
+      <button class="burger" id="burger" type="button"
+              aria-expanded="false" aria-controls="navmenu" aria-label="Open menu">
+        <span></span><span></span>
+      </button>
+    </div>
   </div>
 </header>
 
 <main id="main">
 
-<!-- ───────────────────────── hero ───────────────────────── -->
+<!-- ═══════════════ 1 · hero ═══════════════ -->
 <section class="hero">
-  <div class="wrap hero-in">
-    <div class="hero-copy reveal">
-      <p class="eyebrow">Mandi procurement, made legible</p>
-      <h1>Less waiting.<br><em>More clarity.</em></h1>
-      <p class="lede">
-        At an MSP procurement centre a farmer can wait all day without knowing when their turn
-        comes, what weight was written against their crop, or when the money will arrive.
-        KisanQ answers all three on the farmer's own phone, as they happen.
+  <div class="shell hero-grid">
+    <div class="hero-copy">
+      <p class="kicker">Mandi procurement · Android</p>
+      <h1>Know your turn.<br><em>See your numbers.</em></h1>
+      <p class="hero-sub">
+        Book a procurement slot, follow your queue and see the weighing and quality details
+        recorded at the mandi counter.
       </p>
-
-      <ul class="asks">
-        <li><span class="hi">कब नंबर आएगा?</span><span class="en">When is my turn?</span></li>
-        <li><span class="hi">कितना तौला, कौन सा ग्रेड?</span><span class="en">What weight and grade were recorded?</span></li>
-        <li><span class="hi">पैसा कब आएगा?</span><span class="en">When will I be paid?</span></li>
-      </ul>
-
-      <div class="cta-row">
-        <a class="btn" href="download.html">Download for Android</a>
-        <a class="btn btn-quiet" href="#flow">See the live flow</a>
+      <div class="hero-cta">
+        <a class="btn btn-lg" href="download.html">Download for Android</a>
+        <a class="btn btn-lg btn-text" href="#how">How it works <span aria-hidden="true">→</span></a>
       </div>
-      <p class="fineprint">Android APK · about 110&nbsp;MB · installs outside the Play Store</p>
+
+      <dl class="facts">
+        <div><dt>Languages</dt><dd>12</dd></div>
+        <div><dt>Portals</dt><dd>Farmer · Operator · Admin</dd></div>
+        <div><dt>Built with</dt><dd>React Native · Firebase</dd></div>
+      </dl>
     </div>
 
-    <figure class="hero-shot reveal">
-      <div class="phone">
+    <figure class="hero-shot">
+      <div class="device">
         <img src="assets/home.jpg" width="460" height="1015"
-             alt="KisanQ farmer app home screen showing nine large labelled tiles in Hindi"
-             fetchpriority="high">
+             alt="KisanQ farmer app home screen, in Hindi, with nine large labelled tiles"
+             fetchpriority="high" decoding="async">
       </div>
-      <div class="chip" aria-hidden="true">
-        <span class="pulse"></span>
-        <span><b>KSN-1048</b>आपसे पहले 2 लोग</span>
-      </div>
-      <figcaption>Farmer app home screen. Hindi by default, no menus.</figcaption>
     </figure>
   </div>
 </section>
 
-<!-- ───────────────────────── problem ───────────────────────── -->
-<section id="problem" class="band">
-  <div class="wrap">
-    <header class="sec-head reveal">
-      <p class="eyebrow">01 — The problem</p>
-      <h2>A procurement day, and what it costs</h2>
-      <p class="sec-sub">
-        The three things a farmer most needs to know are the three a procurement centre has no
-        way of telling them. Everything below is the gap KisanQ was built to close.
-      </p>
+<!-- ═══════════════ 2 · challenges ═══════════════ -->
+<section id="challenges" class="section">
+  <div class="shell">
+    <header class="sec-head">
+      <p class="eyebrow">The problem</p>
+      <h2>Three things a farmer cannot find out</h2>
     </header>
 
-    <div class="compare reveal">
-      <div class="col">
-        <h3 class="col-h">As it is now</h3>
-        <ol class="beats">
-          <li><b>Before dawn</b>Leaves home early, because nobody can say when the turn will come.</li>
-          <li><b>At the gate</b>Hours in a tractor-trolley queue. Position unknown, wait unknown.</li>
-          <li><b>At the scale</b>Weight, moisture and grade are recorded. The farmer sees none of it.</li>
-          <li><b>After the sale</b>“Payment in process.” No date, nothing to plan around.</li>
-        </ol>
-      </div>
-      <div class="col col-accent">
-        <h3 class="col-h">With KisanQ</h3>
-        <ol class="beats">
-          <li><b>Books a slot</b>Up to two days ahead, after comparing centres on live wait and remaining capacity.</li>
-          <li><b>Watches the queue</b>A live count of farmers still ahead, which falls as the counter works.</li>
-          <li><b>Sees the weighing</b>Weight, moisture and grade appear on the phone as the operator records them.</li>
-          <li><b>Gets a date</b>A payment stage and an expected date, not an open-ended wait.</li>
-        </ol>
-      </div>
-    </div>
+    <ol class="challenges">
+      <li>
+        <span class="num">01</span>
+        <h3>When the turn comes</h3>
+        <p>Arrive at dawn and wait. There is no queue position to check and no way to time the trip.</p>
+      </li>
+      <li>
+        <span class="num">02</span>
+        <h3>What was recorded</h3>
+        <p>Weight, moisture and grade are written at the counter. The farmer usually hears the result, not the record.</p>
+      </li>
+      <li>
+        <span class="num">03</span>
+        <h3>When payment arrives</h3>
+        <p>“In process” carries no date, so there is nothing to plan the next month around.</p>
+      </li>
+    </ol>
   </div>
 </section>
 
-<!-- ───────────────────────── live flow ───────────────────────── -->
-<section id="flow" class="band band-dark">
-  <div class="wrap">
-    <header class="sec-head reveal">
-      <p class="eyebrow eyebrow-light">02 — The core of it</p>
-      <h2>What the operator records, the farmer sees</h2>
+<!-- ═══════════════ 3 · how it works ═══════════════ -->
+<section id="how" class="section section-alt">
+  <div class="shell">
+    <header class="sec-head sec-head-wide">
+      <p class="eyebrow">How it works</p>
+      <h2>One record, written once, read everywhere</h2>
       <p class="sec-sub">
-        Other systems tell a farmer what happened afterwards, on paper, at a counter. Here the
-        weighing and the grading reach them at the instant they are written. That is what makes a
-        short weight arguable rather than deniable.
+        The farmer's phone and the mandi counter read the same database. Nothing is re-entered,
+        and nothing is reconciled later.
       </p>
     </header>
 
-    <div class="flow reveal">
-      <div class="panel">
-        <p class="panel-h">Operator · mandi counter</p>
-        <dl class="readout">
+    <ol class="steps">
+      <li>
+        <p class="step-n">Step 1</p>
+        <h3>Slot booking</h3>
+        <p>Compare centres on waiting time, remaining buying capacity and the published MSP, then take a slot up to two days ahead.</p>
+      </li>
+      <li>
+        <p class="step-n">Step 2</p>
+        <h3>Digital token</h3>
+        <p>A token number and QR code, shareable over WhatsApp so a phone-less farmer can still be checked in.</p>
+      </li>
+      <li>
+        <p class="step-n">Step 3</p>
+        <h3>Live queue</h3>
+        <p>A count of farmers still ahead, recomputed from the centre's queue as the counter works through it.</p>
+      </li>
+      <li>
+        <p class="step-n">Step 4</p>
+        <h3>Weighing &amp; quality</h3>
+        <p>The operator records actual weight, moisture and grade. The payable amount is computed from MSP, never typed by hand.</p>
+      </li>
+      <li>
+        <p class="step-n">Step 5</p>
+        <h3>Status tracking</h3>
+        <p>Six stages from booked to paid, each carrying the figures it was decided on, and a button to dispute a weight or a grade.</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ═══════════════ 4 · the flow ═══════════════ -->
+<section id="flow" class="section section-dark">
+  <div class="shell">
+    <header class="sec-head sec-head-wide">
+      <p class="eyebrow eyebrow-l">Counter to phone</p>
+      <h2>What the operator records, the farmer sees</h2>
+      <p class="sec-sub">
+        Both screens are driven by live database listeners rather than polling, so an entry at the
+        counter reaches the farmer's phone as soon as the write is confirmed.
+      </p>
+    </header>
+
+    <div class="flow">
+      <div class="flow-side">
+        <p class="flow-h">Operator · counter</p>
+        <dl class="tape">
           <div><dt>Token</dt><dd>KSN-1048</dd></div>
-          <div><dt>Expected</dt><dd>20.0 qtl</dd></div>
-          <div data-step="1" class="is-hidden"><dt>Actual weight</dt><dd class="hit">19.4 qtl</dd></div>
-          <div data-step="2" class="is-hidden"><dt>Moisture</dt><dd>13.5 %</dd></div>
-          <div data-step="2" class="is-hidden"><dt>MSP, wheat</dt><dd>₹2,585 / qtl</dd></div>
-          <div data-step="3" class="is-hidden"><dt>Payable</dt><dd class="hit">₹49,407</dd></div>
+          <div><dt>Expected</dt><dd>20.0 quintals</dd></div>
+          <div data-step="1" hidden><dt>Actual weight</dt><dd class="hot">19.4 quintals</dd></div>
+          <div data-step="2" hidden><dt>Moisture</dt><dd>13.5 %</dd></div>
+          <div data-step="2" hidden><dt>MSP applied</dt><dd>₹2,585 / quintal</dd></div>
+          <div data-step="3" hidden><dt>Payable</dt><dd class="hot">₹49,407</dd></div>
         </dl>
-        <button class="step-btn" id="advance" type="button">Record the weight</button>
+        <button class="btn btn-accent btn-block" id="advance" type="button">Record the weight</button>
       </div>
 
-      <div class="relay" aria-hidden="true">
-        <span class="relay-lab">same second</span>
-        <span class="relay-line"></span>
-      </div>
+      <div class="flow-link" aria-hidden="true"><span></span></div>
 
-      <div class="panel">
-        <p class="panel-h">Farmer · <span class="hi">प्रक्रिया स्थिति</span></p>
-        <ol class="ticks">
-          <li class="done"><span class="hi">स्लॉट बुक हुआ</span></li>
-          <li class="done"><span class="hi">पहुंच गए</span></li>
-          <li data-step="1"><span class="hi">तौल हुई</span> <b class="val">19.4 क्विंटल</b></li>
-          <li data-step="2"><span class="hi">जांच हुई</span> <b class="val">ग्रेड A</b></li>
-          <li data-step="3"><span class="hi">स्वीकार हुआ</span> <b class="val">₹49,407</b></li>
-          <li data-step="4"><span class="hi">भुगतान</span> <b class="val">+3 दिन</b></li>
+      <div class="flow-side">
+        <p class="flow-h">Farmer · <span lang="hi">प्रक्रिया स्थिति</span></p>
+        <ol class="track">
+          <li class="done"><span lang="hi">स्लॉट बुक हुआ</span></li>
+          <li class="done"><span lang="hi">पहुंच गए</span></li>
+          <li data-step="1"><span lang="hi">तौल हुई</span><b>19.4 क्विंटल</b></li>
+          <li data-step="2"><span lang="hi">जांच हुई</span><b>ग्रेड A</b></li>
+          <li data-step="3"><span lang="hi">स्वीकार हुआ</span><b>₹49,407</b></li>
+          <li data-step="4"><span lang="hi">भुगतान</span><b>+3 दिन</b></li>
         </ol>
       </div>
     </div>
 
-    <p class="disclaim reveal">
-      <b>Illustration, not a screenshot.</b> The fields and the status steps are the ones the app
-      stores and displays; the two panels are drawn here so the timing is visible on one screen.
-      The rate shown is the minimum support price for wheat announced for
-      <b>Rabi Marketing Season 2026&#8209;27: ₹2,585 per quintal</b>, the figure the app is
-      configured with.
+    <p class="note note-l">
+      <b>Illustration.</b> The field names, the stages and the arithmetic are the app's own; the two
+      panels are drawn side by side so the sequence is visible on one screen. The rate is the
+      <a href="https://agriwelfare.gov.in/" target="_blank" rel="noopener">published minimum support price</a>
+      for wheat, Rabi Marketing Season 2026–27, ₹2,585 per quintal — the announced price, not a
+      guarantee of what any particular lot is paid.
     </p>
   </div>
 </section>
 
-<!-- ───────────────────────── product ───────────────────────── -->
-<section id="product" class="band">
-  <div class="wrap">
-    <header class="sec-head reveal">
-      <p class="eyebrow">03 — The product</p>
-      <h2>Three portals on one live database</h2>
+<!-- ═══════════════ 5 · product ═══════════════ -->
+<section id="product" class="section">
+  <div class="shell">
+    <header class="sec-head sec-head-wide">
+      <p class="eyebrow">The product</p>
+      <h2>Three portals, one codebase</h2>
       <p class="sec-sub">
-        One codebase. The farmer runs the Android build; the mandi counter and the department run
-        the web build in an ordinary browser, with no new hardware to buy.
+        The farmer runs the Android build. The counter and the department run the web build of the
+        same project in an ordinary browser.
       </p>
     </header>
 
     <!-- farmer -->
-    <article class="part reveal">
-      <div class="part-head">
-        <p class="part-who">Farmer</p>
-        <h3>Android app, Hindi first</h3>
-        <p>
-          Twelve languages, photographs instead of crop names, one decision per screen, and a
-          call button on every screen. Screens below are captures from the running build.
-        </p>
+    <div class="pane">
+      <div class="pane-head">
+        <p class="pane-who">Farmer</p>
+        <h3>Android, Hindi first</h3>
+        <p>Photographs instead of crop names, one decision per screen, a call button everywhere, and twelve languages. These are captures from the running build.</p>
       </div>
-
-      <div class="shots">
+      <div class="gallery">
         <figure>
-          <div class="phone"><img src="assets/home.jpg" width="460" height="1015" alt="Home screen with nine labelled tiles" loading="lazy"></div>
-          <figcaption><b>One tap from home</b>Nine tiles, no menus.</figcaption>
+          <div class="device device-sm"><img src="assets/home.jpg" width="460" height="1015" alt="Home screen with nine labelled tiles" loading="lazy" decoding="async"></div>
+          <figcaption><b>Home</b>Nine tiles, no menus.</figcaption>
         </figure>
         <figure>
-          <div class="phone"><img src="assets/crops.jpg" width="460" height="1015" alt="Crop picker showing photographs of wheat and paddy with a quantity stepper" loading="lazy"></div>
-          <figcaption><b>Pick by sight</b>Crop photographs and a stepper, not typing.</figcaption>
+          <div class="device device-sm"><img src="assets/crops.jpg" width="460" height="1015" alt="Crop picker with photographs of wheat and paddy and a quantity stepper" loading="lazy" decoding="async"></div>
+          <figcaption><b>Choose a crop</b>Pictures and a stepper, not typing.</figcaption>
         </figure>
         <figure>
-          <div class="phone"><img src="assets/centres.jpg" width="460" height="1015" alt="Centre list with distance, estimated wait, remaining capacity and MSP for each mandi" loading="lazy"></div>
-          <figcaption><b>Compare before travelling</b>Wait, remaining capacity and MSP, per mandi.</figcaption>
+          <div class="device device-sm"><img src="assets/centres.jpg" width="460" height="1015" alt="Centre list showing distance, estimated wait, remaining capacity and MSP" loading="lazy" decoding="async"></div>
+          <figcaption><b>Compare centres</b>Wait, capacity and MSP before travelling.</figcaption>
         </figure>
         <figure>
-          <div class="phone"><img src="assets/languages.jpg" width="460" height="1015" alt="Settings screen listing twelve languages with Hindi selected" loading="lazy"></div>
-          <figcaption><b>Twelve languages</b>The choice is the first screen, and it is remembered.</figcaption>
+          <div class="device device-sm"><img src="assets/languages.jpg" width="460" height="1015" alt="Settings screen listing twelve languages with Hindi selected" loading="lazy" decoding="async"></div>
+          <figcaption><b>Twelve languages</b>The first screen, and it is remembered.</figcaption>
         </figure>
       </div>
-      <p class="shotnote">
-        Captured from a development build against seeded demo data. The centre list reads “full”
-        because the demo slots in that snapshot had lapsed, not because of a product limit.
+      <p class="note">
+        Captured against seeded demo data. The centre list reads “full” because the demo slots in
+        that snapshot had lapsed, not because of a limit in the product.
       </p>
-    </article>
+    </div>
 
     <!-- operator -->
-    <article class="part reveal">
-      <div class="part-head">
-        <p class="part-who">Mandi operator</p>
+    <div class="pane">
+      <div class="pane-head">
+        <p class="pane-who">Mandi operator</p>
         <h3>A browser tab at the counter</h3>
-        <p>
-          Staff sign in with an ID and PIN scoped to one centre. Everything the operator records
-          is written once and reaches the farmer's phone immediately.
-        </p>
+        <p>Staff sign in with an ID and PIN scoped to a single centre. No new hardware, no install.</p>
       </div>
-
-      <div class="duo">
-        <figure class="duo-shot">
-          <img src="assets/operator-login.jpg" width="420" height="467" alt="KisanQ staff portal sign-in screen" loading="lazy">
-          <figcaption>Staff sign-in, captured from the live portal at kisanq-farmer.web.app</figcaption>
+      <div class="split">
+        <figure class="split-shot">
+          <img src="assets/operator-login.jpg" width="420" height="467" alt="KisanQ staff portal sign-in screen" loading="lazy" decoding="async">
+          <figcaption>Staff sign-in, captured from the live portal. The staff ID is masked.</figcaption>
         </figure>
-
-        <div class="steps-list">
-          <p class="mini-h">The counter flow <span class="tag">conceptual diagram</span></p>
-          <ol class="numbered">
-            <li><b>Check in</b>Scan the token QR, or type the number — manual entry is always on screen.</li>
-            <li><b>Queue</b>Waiting, processing and completed, in arrival order. Call the next farmer.</li>
-            <li><b>Weigh</b>Expected quantity and actual weight side by side.</li>
-            <li><b>Quality check</b>Moisture and grade; the payable amount is computed from MSP, never typed.</li>
-            <li><b>Accept or reject</b>Both ask for confirmation; a rejection requires a reason.</li>
+        <div>
+          <p class="mini">Counter flow <span class="chip">illustration</span></p>
+          <ol class="plain">
+            <li><b>Check in</b>Scan the token QR, or type the number — manual entry is always visible.</li>
+            <li><b>Queue</b>Waiting, processing and completed, in arrival order.</li>
+            <li><b>Weigh</b>Expected quantity against actual weight.</li>
+            <li><b>Quality</b>Moisture and grade; the amount follows from MSP.</li>
+            <li><b>Accept or reject</b>Both confirm first; a rejection needs a reason.</li>
           </ol>
-          <p class="why">Drawn rather than captured — see the note at the end of this page.</p>
         </div>
-      </div>
-    </article>
-
-    <!-- admin -->
-    <article class="part reveal">
-      <div class="part-head">
-        <p class="part-who">Department</p>
-        <h3>Oversight across centres</h3>
-        <p>
-          The admin console is where capacity, pricing policy and disputes are managed — the
-          layer that turns one mandi's queue into something a district can plan around.
-        </p>
-      </div>
-
-      <div class="grid4">
-        <div class="tile"><p class="mini-h">Centre load</p><p>Bookings, completed, waiting and average wait per centre, with an overload flag above 80% utilisation.</p></div>
-        <div class="tile"><p class="mini-h">Buying capacity</p><p>A daily quintal limit per crop per centre. A booking that would overshoot it is refused with the real number left.</p></div>
-        <div class="tile"><p class="mini-h">Payments</p><p>Quality accepted → J-Form generated → Payment sent → Credited. One stage at a time, admin only.</p></div>
-        <div class="tile"><p class="mini-h">Objections</p><p>A farmer disputing a weight or a grade appears here with the operator's name attached.</p></div>
-      </div>
-      <p class="why"><span class="tag">conceptual diagram</span> No admin screenshots are published on this site yet — see the note below.</p>
-    </article>
-  </div>
-</section>
-
-<!-- ───────────────────────── status ───────────────────────── -->
-<section id="status" class="band band-tint">
-  <div class="wrap">
-    <header class="sec-head reveal">
-      <p class="eyebrow">04 — Stated plainly</p>
-      <h2>What is built, what is simulated, what is not</h2>
-      <p class="sec-sub">
-        KisanQ is an independent prototype. Being specific about its edges is more useful than
-        claiming more than it does.
-      </p>
-    </header>
-
-    <dl class="status reveal">
-      <div class="srow">
-        <dt><span class="dot live"></span>Implemented</dt>
-        <dd>Android app, live web portal, a cloud database with real-time listeners and server-side
-          access rules, and the full flow end to end: slot booking, check-in, live queue, weighing,
-          quality check with MSP pricing, payment stages, objections, and notifications in twelve languages.</dd>
-      </div>
-      <div class="srow">
-        <dt><span class="dot sim"></span>Simulated</dt>
-        <dd><b>Payments.</b> Stages, amounts and dates are genuine records in the database.
-          <b>No money is transferred, and no bank or payment system is connected.</b></dd>
-      </div>
-      <div class="srow">
-        <dt><span class="dot sim"></span>Demo verification</dt>
-        <dd><b>Aadhaar and OTP are mocked.</b> No UIDAI service is contacted and no Aadhaar number is
-          stored — only an internal reference token. Any twelve digits are accepted in the demo.</dd>
-      </div>
-      <div class="srow">
-        <dt><span class="dot todo"></span>Not built</dt>
-        <dd>SMS and IVR for farmers without a smartphone. Every notification is already written to a
-          log in the shape a gateway would need, but no gateway is connected.</dd>
-      </div>
-      <div class="srow">
-        <dt><span class="dot todo"></span>Unfinished</dt>
-        <dd>A government-services interoperability module exists on a separate development branch.
-          It is incomplete, is not part of this release, and is not presented as working.</dd>
-      </div>
-    </dl>
-  </div>
-</section>
-
-<!-- ───────────────────────── get ───────────────────────── -->
-<section id="get" class="band band-dark">
-  <div class="wrap get-in">
-    <div class="reveal">
-      <p class="eyebrow eyebrow-light">05 — Try it</p>
-      <h2>Install the Android app</h2>
-      <p class="sec-sub">
-        The build is distributed directly as an APK, outside the Play Store. Android will ask you
-        to allow installs from your browser the first time.
-      </p>
-
-      <p class="warn">
-        <b>Never enter a real Aadhaar number.</b> Identity verification in this build is a
-        demonstration only. Type any twelve digits — for example 1111&nbsp;1111&nbsp;1111. Real
-        Aadhaar details must not be entered into KisanQ by anyone, at any time.
-      </p>
-
-      <ol class="numbered numbered-light">
-        <li><b>Scan or tap</b>About 110&nbsp;MB — use Wi-Fi.</li>
-        <li><b>Open the downloaded file</b>Allow the install when Android prompts.</li>
-        <li><b>Sign in with the demo flow</b>Any twelve digits stand in for the Aadhaar number; the one-time code is shown on screen.</li>
-      </ol>
-      <div class="cta-row">
-        <a class="btn" href="download.html">Download page</a>
-        <a class="btn btn-ghost" href="https://kisanq-farmer.web.app" target="_blank" rel="noopener">Open the staff portal</a>
       </div>
     </div>
 
-    <figure class="slip reveal">
-      <figcaption class="slip-top">
-        <span class="slip-lab">KisanQ</span>
-        <span class="slip-tok">APK</span>
-        <span class="slip-sub">Android · direct install</span>
-      </figcaption>
-      <img src="assets/qr.png" width="410" height="410" alt="QR code linking to the KisanQ Android APK download" loading="lazy">
-      <p class="slip-foot"><b>Point your camera here</b>The download starts straight away.</p>
+    <!-- admin -->
+    <div class="pane">
+      <div class="pane-head">
+        <p class="pane-who">Department</p>
+        <h3>Oversight across centres</h3>
+        <p>Where capacity, pricing policy and disputes are handled. <span class="chip">illustration — no screenshots published</span></p>
+      </div>
+      <div class="quad">
+        <div><p class="mini">Centre load</p><p>Bookings, completions, waiting and average wait per centre, with an overload flag above 80% utilisation.</p></div>
+        <div><p class="mini">Buying capacity</p><p>A daily quintal limit per crop per centre. A booking that would overshoot it is refused with the real remainder.</p></div>
+        <div><p class="mini">Payments</p><p>Quality accepted → J-Form generated → Payment sent → Credited. One stage at a time, admin only.</p></div>
+        <div><p class="mini">Objections</p><p>A disputed weight or grade arrives here with the operator's name attached.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 6 · honest ═══════════════ -->
+<section id="honest" class="section section-alt">
+  <div class="shell">
+    <header class="sec-head sec-head-wide">
+      <p class="eyebrow">Stated plainly</p>
+      <h2>A working prototype, and its edges</h2>
+    </header>
+
+    <div class="ledger">
+      <div class="led">
+        <p class="led-k"><i class="d d-on"></i>Built and working</p>
+        <p>Android app, live staff portal, cloud database with real-time listeners and server-side access rules, and the whole flow: booking, check-in, live queue, weighing, quality check with MSP pricing, payment stages, objections, notifications in twelve languages.</p>
+      </div>
+      <div class="led">
+        <p class="led-k"><i class="d d-sim"></i>Simulated</p>
+        <p><b>Aadhaar and OTP verification.</b> No UIDAI service is contacted and no Aadhaar number is stored — only an internal reference token.<br>
+        <b>Payments.</b> Stages, amounts and dates are genuine database records. No money moves and no bank or payment system is connected.</p>
+      </div>
+      <div class="led">
+        <p class="led-k"><i class="d d-off"></i>Not deployed</p>
+        <p><b>SMS and IVR.</b> Every notification is already written to a log in the shape a gateway would need, but no gateway is connected.<br>
+        <b>Government interoperability.</b> Incomplete, on a separate branch, not part of this release.</p>
+      </div>
+    </div>
+
+    <p class="affil">
+      KisanQ is an independent prototype. It is not affiliated with, endorsed by or commissioned by
+      any ministry, department, mandi board or procurement authority, and it is not integrated with
+      e-NAM, any state procurement portal, UIDAI, or any banking system. Centre names, staff
+      accounts and procurement records in the app are demo data.
+    </p>
+  </div>
+</section>
+
+<!-- ═══════════════ 7 · download ═══════════════ -->
+<section id="get" class="section section-dark">
+  <div class="shell get">
+    <div>
+      <p class="eyebrow eyebrow-l">Try it</p>
+      <h2>Install the Android app</h2>
+      <p class="sec-sub">
+        Distributed directly as an APK. It is not on Google Play, so Android will ask you to allow
+        the install the first time.
+      </p>
+      <p class="warn">
+        <b>Never enter a real Aadhaar number.</b> Verification in this build is a demonstration.
+        Type any twelve digits.
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-lg btn-accent" href="download.html">Get the APK</a>
+        <a class="btn btn-lg btn-text btn-text-l" href="download.html#install">Install steps <span aria-hidden="true">→</span></a>
+      </div>
+    </div>
+    <figure class="qr-card">
+      <img src="assets/qr.png" width="660" height="660" alt="QR code that opens the KisanQ Android APK download" loading="lazy" decoding="async">
+      <figcaption><b>Scan with a phone camera</b>Opens the APK download in your browser.</figcaption>
     </figure>
   </div>
 </section>
 
-<!-- ───────────────────────── about ───────────────────────── -->
-<section id="about" class="band">
-  <div class="wrap about-in">
-    <div class="reveal">
-      <p class="eyebrow">06 — About</p>
-      <h2>An independent student project</h2>
+<!-- ═══════════════ 8 · team ═══════════════ -->
+<section id="team" class="section">
+  <div class="shell team">
+    <div>
+      <p class="eyebrow">Who built it</p>
+      <h2>Team CodeCrew</h2>
       <p class="sec-sub">
-        KisanQ was designed and built by <b>Team CodeCrew</b> as an independent prototype,
-        originally for Smart India Hackathon problem statement SIH26032 on procurement waiting
-        times and status transparency.
-      </p>
-      <p class="disclose">
-        <b>Not affiliated with any government body.</b> KisanQ is not endorsed by, commissioned by,
-        or connected to any ministry, department, mandi board or procurement agency, and is not
-        integrated with e&#8209;NAM, any state procurement portal, UIDAI, or any banking system.
-        Centre names, staff accounts and procurement records in the app are demo data.
-      </p>
-
-      <p class="assetnote">
-        <b>About the images here.</b> Every phone screen is a real capture from the running Android
-        build, and the sign-in screen is a real capture of the live staff portal. The counter flow,
-        the admin capabilities and the two panels in the live-flow section are labelled diagrams:
-        capturing the operator and admin screens requires signing in, which writes to the project
-        database, and that was deliberately not done. No screen on this site is invented.
+        KisanQ was designed and built as an independent student project, originally for Smart India
+        Hackathon problem statement SIH26032 on procurement waiting times and status transparency.
+        It is not a commissioned or government product.
       </p>
     </div>
-    <div class="facts reveal">
-      <dl>
-        <div><dt>Farmer app</dt><dd>React Native · Expo · Android</dd></div>
-        <div><dt>Staff portals</dt><dd>Same codebase, web build</dd></div>
-        <div><dt>Backend</dt><dd>Cloud database with real-time listeners</dd></div>
-        <div><dt>Languages</dt><dd>12, Hindi by default</dd></div>
-        <div><dt>Status</dt><dd>Working prototype</dd></div>
-      </dl>
-    </div>
+    <dl class="facts facts-col">
+      <div><dt>Farmer app</dt><dd>React Native · Expo · Android</dd></div>
+      <div><dt>Staff portals</dt><dd>Same codebase, web build</dd></div>
+      <div><dt>Backend</dt><dd>Cloud database, real-time listeners</dd></div>
+      <div><dt>Status</dt><dd>Working prototype</dd></div>
+    </dl>
   </div>
 </section>
 
 </main>
 
 <footer class="foot">
-  <div class="wrap foot-in">
+  <div class="shell foot-in">
     <p><b>KisanQ</b> · Team CodeCrew · Independent prototype, 2026</p>
-    <p>
+    <nav aria-label="Footer">
       <a href="download.html">Download</a>
-      <a href="https://kisanq-farmer.web.app" target="_blank" rel="noopener">Staff portal</a>
+      <a href="#honest">What's real</a>
       <a href="#top">Back to top</a>
-    </p>
+    </nav>
   </div>
 </footer>
 

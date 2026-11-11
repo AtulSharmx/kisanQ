@@ -47,3 +47,7 @@ serviceAccountKey.json
 # generated native folders
 /ios
 /android
+
+# Signed APK. dist/ is build output that `expo export` wipes, so a copy is kept
+# in .apk-keep/. Neither belongs in git (110 MB).
+.apk-keep/
